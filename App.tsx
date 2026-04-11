@@ -1,11 +1,13 @@
+import React, { useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text } from 'react-native';
 import FeedScreen from './screens/FeedScreen';
 import MapScreen from './screens/MapScreen';
 import CreateScreen from './screens/CreateScreen';
 import MessagesScreen from './screens/MessagesScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import AuthScreen from './screens/AuthScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -17,6 +19,10 @@ function TabIcon({ color, sport }: { color: string, sport: string }) {
 }
 
 export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  if (!isLoggedIn) return <AuthScreen onLogin={() => setIsLoggedIn(true)} />;
+
   return (
     <NavigationContainer>
       <Tab.Navigator
