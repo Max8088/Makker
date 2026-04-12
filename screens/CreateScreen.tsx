@@ -1,5 +1,6 @@
 ﻿import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert } from 'react-native';
+import { supabase } from '../lib/supabase';
 
 const SPORTS = [
   { id: 'route', label: 'Route', emoji: '🚴' },
@@ -26,6 +27,66 @@ export default function CreateScreen() {
   const [time, setTime] = useState('');
   const [location, setLocation] = useState('');
   const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handlePublish = async () => {
+    if (!title || !date || !time || !distance || !location) {
+      Alert.alert('Champs manquants', 'Merci de remplir au minimum le titre, la date, l\'heure, la distance et le point de rendez-vous.');
+      return;
+    }
+
+    setLoading(true);
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      Alert.alert('Erreur', 'Tu dois être connecté pour publier une sortie.');
+      setLoading(false);
+      return;
+    }
+
+    const { error } = await supabase.from('sorties').insert({
+      titre: title,
+      sport: selectedSport,
+      distance,
+      elevation,
+      allure: pace,
+      niveau: selectedLevel,
+      lieu: location,
+      lieu_rencontre: location,
+      date_sortie: date,
+      heure: time,
+      participants_max: participants,
+      description,
+      createur_id: user.id,
+      latitude: 45.7490,
+      longitude: 4.8350,
+    });
+
+    setLoading(false);
+
+    if (error) {
+      Alert.alert('Erreur', error.message);
+    } else {
+      Alert.alert('Sortie publiée ! 🎉', 'Ta sortie est maintenant visible par les autres sportifs.', [
+        {
+          text: 'OK', onPress: () => {
+            setTitle('');
+            setDistance('');
+            setElevation('');
+            setPace('');
+            setDate('');
+            setTime('');
+            setLocation('');
+            setDescription('');
+            setSelectedSport('route');
+            setSelectedLevel('intermediaire');
+            setParticipants(8);
+          }
+        }
+      ]);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -136,8 +197,14 @@ export default function CreateScreen() {
           />
         </View>
 
-        <TouchableOpacity style={styles.publishBtn}>
-          <Text style={styles.publishText}>Publier la sortie</Text>
+        <TouchableOpacity
+          style={[styles.publishBtn, loading && { opacity: 0.7 }]}
+          onPress={handlePublish}
+          disabled={loading}
+        >
+          <Text style={styles.publishText}>
+            {loading ? 'Publication...' : 'Publier la sortie'}
+          </Text>
         </TouchableOpacity>
 
         <View style={{ height: 20 }} />

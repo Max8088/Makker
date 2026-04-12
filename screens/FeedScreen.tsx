@@ -1,5 +1,6 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Alert } from 'react-native';
+import { supabase } from '../lib/supabase';
 
 const SPORTS = [
   { id: 'all', label: 'Tous' },
@@ -9,21 +10,80 @@ const SPORTS = [
   { id: 'running', label: 'Running' },
 ];
 
-const RIDES = [
-  { id: 1, title: 'Sortie Croix-Rousse', sport: 'route', sportLabel: '🚴 Cyclisme Route', distance: '52km', elevation: '780m', pace: '28km/h', location: 'Lyon 4e', date: '12 Avr à 07h00', going: 3, max: 8 },
-  { id: 2, title: 'Trail Monts du Lyonnais', sport: 'trail', sportLabel: '🏔️ Trail', distance: '18km', elevation: '950m', pace: '7:00/km', location: 'Saint-Martin', date: '13 Avr à 08h00', going: 4, max: 6 },
-  { id: 3, title: 'VTT Pilat', sport: 'vtt', sportLabel: '🚵 VTT', distance: '35km', elevation: '1100m', pace: '18km/h', location: 'Crêt de la Perdrix', date: '13 Avr à 09h00', going: 2, max: 6 },
-  { id: 4, title: 'Running Parc de la Tête d\'Or', sport: 'running', sportLabel: '🏃 Running', distance: '10km', elevation: '60m', pace: '5:30/km', location: 'Lyon 6e', date: '14 Avr à 06h30', going: 5, max: 10 },
-  { id: 5, title: 'Col de la Luère', sport: 'route', sportLabel: '🚴 Cyclisme Route', distance: '68km', elevation: '1200m', pace: '25km/h', location: 'Craponne', date: '15 Avr à 07h00', going: 6, max: 12 },
-];
-
 const SPORT_COLORS: { [key: string]: string } = {
   route: '#4F46E5', vtt: '#f59f00', trail: '#5B52F0', running: '#A78BFA'
 };
 
+const SPORT_EMOJIS: { [key: string]: string } = {
+  route: '🚴', vtt: '🚵', trail: '🏔️', running: '🏃'
+};
+
+const SPORT_LABELS: { [key: string]: string } = {
+  route: 'Cyclisme Route', vtt: 'VTT', trail: 'Trail', running: 'Running'
+};
+
+type Sortie = {
+  id: string;
+  titre: string;
+  sport: string;
+  distance: string;
+  elevation: string;
+  allure: string;
+  lieu: string;
+  date_sortie: string;
+  heure: string;
+  participants_max: number;
+  niveau: string;
+  created_at: string;
+};
+
 export default function FeedScreen() {
-  const [activeFilter, setActiveFilter] = React.useState('all');
-  const filtered = activeFilter === 'all' ? RIDES : RIDES.filter(r => r.sport === activeFilter);
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [sorties, setSorties] = useState<Sortie[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchSorties = async () => {
+    const { data, error } = await supabase
+      .from('sorties')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error(error);
+    } else {
+      setSorties(data || []);
+    }
+    setLoading(false);
+    setRefreshing(false);
+  };
+
+  useEffect(() => {
+    fetchSorties();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchSorties();
+  };
+
+  const handleRejoindre = async (sortieId: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase.from('participations').insert({
+      sortie_id: sortieId,
+      user_id: user.id,
+    });
+
+    if (error) {
+      Alert.alert('Erreur', 'Tu as peut-être déjà rejoint cette sortie.');
+    } else {
+      Alert.alert('Super ! 🎉', 'Tu as rejoint la sortie !');
+    }
+  };
+
+  const filtered = activeFilter === 'all' ? sorties : sorties.filter(s => s.sport === activeFilter);
 
   return (
     <View style={styles.container}>
@@ -49,42 +109,57 @@ export default function FeedScreen() {
         ))}
       </ScrollView>
 
-      <ScrollView style={styles.feed} contentContainerStyle={{ padding: 16, gap: 12 }}>
-        {filtered.map(ride => (
-          <View key={ride.id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.sportDot, { backgroundColor: SPORT_COLORS[ride.sport] + '18' }]}>
-                <Text style={{ fontSize: 18 }}>{ride.sportLabel.split(' ')[0]}</Text>
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          <Text style={styles.loadingText}>Chargement des sorties...</Text>
+        </View>
+      ) : filtered.length === 0 ? (
+        <View style={styles.loadingWrap}>
+          <Text style={styles.loadingText}>Aucune sortie pour l'instant.</Text>
+          <Text style={styles.loadingSub}>Sois le premier à en créer une ! 🚴</Text>
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.feed}
+          contentContainerStyle={{ padding: 16, gap: 12 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#5B52F0" />}
+        >
+          {filtered.map(ride => (
+            <View key={ride.id} style={styles.card}>
+              <View style={styles.cardHeader}>
+                <View style={[styles.sportDot, { backgroundColor: SPORT_COLORS[ride.sport] + '18' }]}>
+                  <Text style={{ fontSize: 18 }}>{SPORT_EMOJIS[ride.sport]}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>{ride.titre}</Text>
+                  <Text style={styles.cardSport}>{SPORT_EMOJIS[ride.sport]} {SPORT_LABELS[ride.sport]}</Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>{ride.title}</Text>
-                <Text style={styles.cardSport}>{ride.sportLabel}</Text>
+              <View style={styles.statsRow}>
+                <View style={styles.stat}>
+                  <Text style={styles.statLabel}>Distance</Text>
+                  <Text style={styles.statVal}>{ride.distance} km</Text>
+                </View>
+                <View style={styles.stat}>
+                  <Text style={styles.statLabel}>Dénivelé</Text>
+                  <Text style={styles.statVal}>{ride.elevation} m</Text>
+                </View>
+                <View style={styles.stat}>
+                  <Text style={styles.statLabel}>Allure</Text>
+                  <Text style={styles.statVal}>{ride.allure}</Text>
+                </View>
+              </View>
+              <Text style={styles.meta}>📍 {ride.lieu}  ·  📅 {ride.date_sortie} à {ride.heure}</Text>
+              <View style={styles.cardFooter}>
+                <Text style={styles.going}>Max {ride.participants_max} participants</Text>
+                <TouchableOpacity style={styles.joinBtn} onPress={() => handleRejoindre(ride.id)}>
+                  <Text style={styles.joinText}>Rejoindre</Text>
+                </TouchableOpacity>
               </View>
             </View>
-            <View style={styles.statsRow}>
-              <View style={styles.stat}>
-                <Text style={styles.statLabel}>Distance</Text>
-                <Text style={styles.statVal}>{ride.distance}</Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.statLabel}>Dénivelé</Text>
-                <Text style={styles.statVal}>{ride.elevation}</Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.statLabel}>Allure</Text>
-                <Text style={styles.statVal}>{ride.pace}</Text>
-              </View>
-            </View>
-            <Text style={styles.meta}>📍 {ride.location}  ·  📅 {ride.date}</Text>
-            <View style={styles.cardFooter}>
-              <Text style={styles.going}>{ride.going}/{ride.max} participants</Text>
-              <TouchableOpacity style={styles.joinBtn}>
-                <Text style={styles.joinText}>Rejoindre</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
-      </ScrollView>
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -100,6 +175,9 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 12, fontWeight: '500', color: '#8888bb' },
   chipTextActive: { color: '#fff' },
   feed: { flex: 1 },
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  loadingText: { fontSize: 15, fontWeight: '600', color: '#8888bb' },
+  loadingSub: { fontSize: 13, color: '#bbbbdd' },
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#DDD8FF', marginBottom: 12 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   sportDot: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Image
+  StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Image, Alert
 } from 'react-native';
+import { supabase } from '../lib/supabase';
 
 type Mode = 'login' | 'register';
 
@@ -13,6 +14,50 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
   const [nom, setNom] = useState('');
   const [prenom, setPrenom] = useState('');
   const [ville, setVille] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Erreur', 'Merci de remplir tous les champs');
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) {
+      Alert.alert('Erreur de connexion', error.message);
+    } else {
+      onLogin();
+    }
+  };
+
+  const handleRegister = async () => {
+    if (!email || !password || !prenom || !nom || !ville) {
+      Alert.alert('Erreur', 'Merci de remplir tous les champs');
+      return;
+    }
+    setLoading(true);
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) {
+      setLoading(false);
+      Alert.alert('Erreur d\'inscription', error.message);
+      return;
+    }
+    if (data.user) {
+      await supabase.from('profiles').insert({
+        id: data.user.id,
+        prenom,
+        nom,
+        ville,
+        sport_principal: 'route',
+        niveau: 'intermediaire',
+      });
+    }
+    setLoading(false);
+    Alert.alert('Compte créé !', 'Tu peux maintenant te connecter.', [
+      { text: 'OK', onPress: () => setMode('login') }
+    ]);
+  };
 
   return (
     <KeyboardAvoidingView
@@ -21,7 +66,6 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
-        {/* LOGO */}
         <View style={styles.logoWrap}>
           <Image
             source={require('../assets/logo_makker.png')}
@@ -32,7 +76,6 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
           <Text style={styles.logoSub}>ENSEMBLE, PLUS LOIN</Text>
         </View>
 
-        {/* TOGGLE */}
         <View style={styles.toggle}>
           <TouchableOpacity
             style={[styles.toggleBtn, mode === 'login' && styles.toggleBtnActive]}
@@ -48,7 +91,6 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
           </TouchableOpacity>
         </View>
 
-        {/* FORMULAIRE */}
         <View style={styles.form}>
 
           {mode === 'register' && (
@@ -123,9 +165,13 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity style={styles.submitBtn} onPress={onLogin}>
+          <TouchableOpacity
+            style={[styles.submitBtn, loading && { opacity: 0.7 }]}
+            onPress={mode === 'login' ? handleLogin : handleRegister}
+            disabled={loading}
+          >
             <Text style={styles.submitText}>
-              {mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
+              {loading ? 'Chargement...' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
             </Text>
           </TouchableOpacity>
 
@@ -135,7 +181,7 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
             <View style={styles.dividerLine} />
           </View>
 
-          <TouchableOpacity style={styles.googleBtn} onPress={onLogin}>
+          <TouchableOpacity style={styles.googleBtn}>
             <Text style={styles.googleEmoji}>🔵</Text>
             <Text style={styles.googleText}>Continuer avec Google</Text>
           </TouchableOpacity>
@@ -160,7 +206,7 @@ const styles = StyleSheet.create({
   logoWrap: { alignItems: 'center', marginBottom: 36 },
   logoImage: { width: 90, height: 90, borderRadius: 22, marginBottom: 16 },
   logoText: { fontSize: 32, fontWeight: '800', color: '#1a1a2e', letterSpacing: 2 },
-  logoSub: { fontSize: 11, color: '#8888bb', marginTop: 6, letterSpacing: 2 },
+  logoSub: { fontSize: 11, color: '#7B7BAA', marginTop: 6, letterSpacing: 2 },
   toggle: {
     flexDirection: 'row',
     backgroundColor: '#fff',
@@ -176,14 +222,14 @@ const styles = StyleSheet.create({
   form: { gap: 14 },
   row: { flexDirection: 'row', gap: 10 },
   fieldGroup: { gap: 6 },
-  label: { fontSize: 12, fontWeight: '600', color: '#8888bb' },
+  label: { fontSize: 12, fontWeight: '600', color: '#7B7BAA' },
   input: {
     backgroundColor: '#fff', borderRadius: 10,
     borderWidth: 1.5, borderColor: '#DDD8FF',
     padding: 12, fontSize: 14, color: '#1a1a2e',
   },
   forgotBtn: { alignSelf: 'flex-end' },
-  forgotText: { fontSize: 12, color: '#8888bb', fontWeight: '500' },
+  forgotText: { fontSize: 12, color: '#7B7BAA', fontWeight: '500' },
   submitBtn: { backgroundColor: '#5B52F0', borderRadius: 12, padding: 15, alignItems: 'center' },
   submitText: { color: '#fff', fontSize: 15, fontWeight: '600', letterSpacing: 0.5 },
   divider: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -197,5 +243,5 @@ const styles = StyleSheet.create({
   googleEmoji: { fontSize: 18 },
   googleText: { fontSize: 14, fontWeight: '500', color: '#1a1a2e' },
   footer: { textAlign: 'center', marginTop: 24, fontSize: 13, color: '#aaa' },
-  footerLink: { color: '#8888bb', fontWeight: '600' },
+  footerLink: { color: '#7B7BAA', fontWeight: '600' },
 });
