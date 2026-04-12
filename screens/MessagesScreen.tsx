@@ -9,7 +9,7 @@ const CONVERSATIONS = [
 ];
 
 const SPORT_COLORS: { [key: string]: string } = {
-  route: '#2196f3', vtt: '#f59f00', trail: '#1bdf8a', running: '#9c27b0'
+  route: '#4F46E5', vtt: '#f59f00', trail: '#5B52F0', running: '#A78BFA'
 };
 
 const MESSAGES: { [key: number]: { from: string; text: string; time: string; me: boolean }[] } = {
@@ -53,7 +53,7 @@ export default function MessagesScreen() {
   if (openChat) {
     const conv = CONVERSATIONS.find(c => c.id === openChat)!;
     return (
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={10}>
+      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={100}>
         <View style={styles.chatHeader}>
           <TouchableOpacity style={styles.backBtn} onPress={() => setOpenChat(null)}>
             <Text style={styles.backArrow}>←</Text>
@@ -90,7 +90,7 @@ export default function MessagesScreen() {
           <TextInput
             style={styles.msgInput}
             placeholder="Message..."
-            placeholderTextColor="#bbb"
+            placeholderTextColor="#bbbbdd"
             value={newMessage}
             onChangeText={setNewMessage}
             onSubmitEditing={sendMessage}
@@ -138,40 +138,40 @@ export default function MessagesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7f8fa', paddingTop: 56 },
+  container: { flex: 1, backgroundColor: '#F4F3FF', paddingTop: 56 },
   header: { paddingHorizontal: 20, marginBottom: 12 },
-  title: { fontSize: 26, fontWeight: '700', color: '#0d0d0d' },
-  subtitle: { fontSize: 13, color: '#aaa', marginTop: 2 },
+  title: { fontSize: 26, fontWeight: '800', color: '#1a1a2e', letterSpacing: 1 },
+  subtitle: { fontSize: 13, color: '#8888bb', marginTop: 2 },
   list: { flex: 1 },
-  convItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
+  convItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#EEEDFE' },
   convIcon: { width: 46, height: 46, borderRadius: 13, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   convInfo: { flex: 1, minWidth: 0 },
   convTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 },
-  convName: { fontSize: 14, fontWeight: '600', color: '#0d0d0d' },
-  convTime: { fontSize: 11, color: '#bbb' },
-  convPreview: { fontSize: 12, color: '#aaa' },
-  convPreviewUnread: { color: '#555', fontWeight: '500' },
-  badge: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#1bdf8a', alignItems: 'center', justifyContent: 'center' },
+  convName: { fontSize: 14, fontWeight: '600', color: '#1a1a2e' },
+  convTime: { fontSize: 11, color: '#8888bb' },
+  convPreview: { fontSize: 12, color: '#8888bb' },
+  convPreviewUnread: { color: '#1a1a2e', fontWeight: '500' },
+  badge: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#5B52F0', alignItems: 'center', justifyContent: 'center' },
   badgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
-  chatHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  backBtn: { width: 32, height: 32, borderRadius: 9, backgroundColor: '#f5f5f5', alignItems: 'center', justifyContent: 'center' },
-  backArrow: { fontSize: 18, color: '#555' },
-  chatTitle: { fontSize: 14, fontWeight: '600', color: '#0d0d0d' },
-  chatSub: { fontSize: 11, color: '#aaa' },
+  chatHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#EEEDFE' },
+  backBtn: { width: 32, height: 32, borderRadius: 9, backgroundColor: '#EEEDFE', alignItems: 'center', justifyContent: 'center' },
+  backArrow: { fontSize: 18, color: '#5B52F0' },
+  chatTitle: { fontSize: 14, fontWeight: '600', color: '#1a1a2e' },
+  chatSub: { fontSize: 11, color: '#8888bb' },
   messages: { flex: 1 },
   msgRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-end' },
   msgRowMe: { flexDirection: 'row-reverse' },
-  msgAvatar: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#e0e2e8', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  msgAvatarText: { fontSize: 12, fontWeight: '600', color: '#555' },
+  msgAvatar: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#EEEDFE', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  msgAvatarText: { fontSize: 12, fontWeight: '600', color: '#5B52F0' },
   msgCol: { maxWidth: '75%' },
-  msgSender: { fontSize: 10, color: '#aaa', marginBottom: 3, marginLeft: 2 },
-  bubble: { backgroundColor: '#fff', borderRadius: 14, borderBottomLeftRadius: 4, padding: 10, borderWidth: 1, borderColor: '#eaecf0' },
-  bubbleMe: { backgroundColor: '#1bdf8a', borderColor: '#1bdf8a', borderBottomLeftRadius: 14, borderBottomRightRadius: 4 },
-  bubbleText: { fontSize: 13, color: '#0d0d0d', lineHeight: 18 },
+  msgSender: { fontSize: 10, color: '#8888bb', marginBottom: 3, marginLeft: 2 },
+  bubble: { backgroundColor: '#fff', borderRadius: 14, borderBottomLeftRadius: 4, padding: 10, borderWidth: 1, borderColor: '#DDD8FF' },
+  bubbleMe: { backgroundColor: '#5B52F0', borderColor: '#5B52F0', borderBottomLeftRadius: 14, borderBottomRightRadius: 4 },
+  bubbleText: { fontSize: 13, color: '#1a1a2e', lineHeight: 18 },
   bubbleTextMe: { color: '#fff' },
-  msgTime: { fontSize: 10, color: '#bbb', marginTop: 3, textAlign: 'right' },
-  inputBar: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#f0f0f0' },
-  msgInput: { flex: 1, backgroundColor: '#f5f6f8', borderRadius: 20, borderWidth: 1.5, borderColor: '#eaecf0', padding: 10, fontSize: 13, color: '#0d0d0d' },
-  sendBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#1bdf8a', alignItems: 'center', justifyContent: 'center' },
+  msgTime: { fontSize: 10, color: '#8888bb', marginTop: 3, textAlign: 'right' },
+  inputBar: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#DDD8FF' },
+  msgInput: { flex: 1, backgroundColor: '#F4F3FF', borderRadius: 20, borderWidth: 1.5, borderColor: '#DDD8FF', padding: 10, fontSize: 13, color: '#1a1a2e' },
+  sendBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#5B52F0', alignItems: 'center', justifyContent: 'center' },
   sendText: { fontSize: 18, color: '#fff', fontWeight: '700' },
 });

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, ScrollView
+  StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Image
 } from 'react-native';
 
 type Mode = 'login' | 'register';
@@ -23,14 +23,16 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
 
         {/* LOGO */}
         <View style={styles.logoWrap}>
-          <View style={styles.logoIcon}>
-            <Text style={styles.logoEmoji}>≫</Text>
-          </View>
-          <Text style={styles.logoText}>Makker</Text>
-          <Text style={styles.logoSub}>Trouve ta prochaine aventure</Text>
+          <Image
+            source={require('../assets/logo_makker.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
+          <Text style={styles.logoText}>MAKKER</Text>
+          <Text style={styles.logoSub}>ENSEMBLE, PLUS LOIN</Text>
         </View>
 
-        {/* TOGGLE LOGIN / REGISTER */}
+        {/* TOGGLE */}
         <View style={styles.toggle}>
           <TouchableOpacity
             style={[styles.toggleBtn, mode === 'login' && styles.toggleBtnActive]}
@@ -57,7 +59,7 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
                   <TextInput
                     style={styles.input}
                     placeholder="ex: Maxime"
-                    placeholderTextColor="#bbb"
+                    placeholderTextColor="#bbbbdd"
                     value={prenom}
                     onChangeText={setPrenom}
                     autoCapitalize="words"
@@ -68,7 +70,7 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
                   <TextInput
                     style={styles.input}
                     placeholder="ex: Dupont"
-                    placeholderTextColor="#bbb"
+                    placeholderTextColor="#bbbbdd"
                     value={nom}
                     onChangeText={setNom}
                     autoCapitalize="words"
@@ -81,7 +83,7 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
                 <TextInput
                   style={styles.input}
                   placeholder="ex: Lyon"
-                  placeholderTextColor="#bbb"
+                  placeholderTextColor="#bbbbdd"
                   value={ville}
                   onChangeText={setVille}
                   autoCapitalize="words"
@@ -95,7 +97,7 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
             <TextInput
               style={styles.input}
               placeholder="ton@email.com"
-              placeholderTextColor="#bbb"
+              placeholderTextColor="#bbbbdd"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -108,7 +110,7 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
             <TextInput
               style={styles.input}
               placeholder="••••••••"
-              placeholderTextColor="#bbb"
+              placeholderTextColor="#bbbbdd"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -153,62 +155,47 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7f8fa' },
+  container: { flex: 1, backgroundColor: '#F4F3FF' },
   scroll: { flexGrow: 1, padding: 24, justifyContent: 'center' },
-  logoWrap: { alignItems: 'center', marginBottom: 32 },
-  logoIcon: {
-    width: 70, height: 70, borderRadius: 20,
-    backgroundColor: '#1bdf8a',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 12,
-    shadowColor: '#1bdf8a', shadowOpacity: 0.35,
-    shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-  },
-  logoEmoji: { fontSize: 32, color: '#fff', fontWeight: '900' },
-  logoText: { fontSize: 32, fontWeight: '800', color: '#0d0d0d', letterSpacing: -1 },
-  logoSub: { fontSize: 14, color: '#aaa', marginTop: 4 },
+  logoWrap: { alignItems: 'center', marginBottom: 36 },
+  logoImage: { width: 90, height: 90, borderRadius: 22, marginBottom: 16 },
+  logoText: { fontSize: 32, fontWeight: '800', color: '#1a1a2e', letterSpacing: 2 },
+  logoSub: { fontSize: 11, color: '#8888bb', marginTop: 6, letterSpacing: 2 },
   toggle: {
     flexDirection: 'row',
     backgroundColor: '#fff',
     borderRadius: 12,
-    borderWidth: 1, borderColor: '#eaecf0',
+    borderWidth: 1, borderColor: '#DDD8FF',
     padding: 4,
     marginBottom: 24,
   },
   toggleBtn: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: 'center' },
-  toggleBtnActive: { backgroundColor: '#1bdf8a' },
-  toggleText: { fontSize: 14, fontWeight: '600', color: '#aaa' },
+  toggleBtnActive: { backgroundColor: '#5B52F0' },
+  toggleText: { fontSize: 14, fontWeight: '500', color: '#999' },
   toggleTextActive: { color: '#fff' },
   form: { gap: 14 },
   row: { flexDirection: 'row', gap: 10 },
   fieldGroup: { gap: 6 },
-  label: { fontSize: 12, fontWeight: '600', color: '#555' },
+  label: { fontSize: 12, fontWeight: '600', color: '#8888bb' },
   input: {
     backgroundColor: '#fff', borderRadius: 10,
-    borderWidth: 1.5, borderColor: '#e8eaed',
-    padding: 12, fontSize: 14, color: '#0d0d0d',
+    borderWidth: 1.5, borderColor: '#DDD8FF',
+    padding: 12, fontSize: 14, color: '#1a1a2e',
   },
   forgotBtn: { alignSelf: 'flex-end' },
-  forgotText: { fontSize: 12, color: '#1bdf8a', fontWeight: '500' },
-  submitBtn: {
-    backgroundColor: '#1bdf8a', borderRadius: 12,
-    padding: 15, alignItems: 'center',
-    shadowColor: '#1bdf8a', shadowOpacity: 0.3,
-    shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
-  submitText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  forgotText: { fontSize: 12, color: '#8888bb', fontWeight: '500' },
+  submitBtn: { backgroundColor: '#5B52F0', borderRadius: 12, padding: 15, alignItems: 'center' },
+  submitText: { color: '#fff', fontSize: 15, fontWeight: '600', letterSpacing: 0.5 },
   divider: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#eaecf0' },
-  dividerText: { fontSize: 12, color: '#bbb' },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#e0dcff' },
+  dividerText: { fontSize: 12, color: '#aaa' },
   googleBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 10, backgroundColor: '#fff', borderRadius: 12,
-    borderWidth: 1.5, borderColor: '#e8eaed', padding: 13,
+    borderWidth: 1.5, borderColor: '#DDD8FF', padding: 13,
   },
   googleEmoji: { fontSize: 18 },
-  googleText: { fontSize: 14, fontWeight: '600', color: '#0d0d0d' },
+  googleText: { fontSize: 14, fontWeight: '500', color: '#1a1a2e' },
   footer: { textAlign: 'center', marginTop: 24, fontSize: 13, color: '#aaa' },
-  footerLink: { color: '#1bdf8a', fontWeight: '600' },
+  footerLink: { color: '#8888bb', fontWeight: '600' },
 });

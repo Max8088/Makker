@@ -23,7 +23,7 @@ const PAST_RIDES = [
 ];
 
 const SPORT_COLORS: { [key: string]: string } = {
-  route: '#2196f3', vtt: '#f59f00', trail: '#1bdf8a', running: '#9c27b0'
+  route: '#4F46E5', vtt: '#f59f00', trail: '#5B52F0', running: '#A78BFA'
 };
 
 const TABS = ['Statistiques', 'Sorties', 'Infos'];
@@ -58,7 +58,6 @@ export default function ProfileScreen() {
 
       <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
 
-        {/* CARTE PROFIL */}
         <View style={styles.profileCard}>
           <View style={styles.avatarWrap}>
             <View style={styles.avatar}>
@@ -93,7 +92,6 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* TABS */}
         <View style={styles.tabs}>
           {TABS.map(tab => (
             <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && styles.tabActive]} onPress={() => setActiveTab(tab)}>
@@ -102,7 +100,6 @@ export default function ProfileScreen() {
           ))}
         </View>
 
-        {/* TAB STATISTIQUES */}
         {activeTab === 'Statistiques' && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Global</Text>
@@ -113,14 +110,13 @@ export default function ProfileScreen() {
             </View>
             <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Ce mois-ci</Text>
             <View style={styles.statsGrid}>
-              <View style={[styles.statCard, { borderColor: '#1bdf8a' }]}><Text style={[styles.statVal, { color: '#1bdf8a' }]}>8</Text><Text style={styles.statLabel}>Sorties</Text></View>
-              <View style={[styles.statCard, { borderColor: '#1bdf8a' }]}><Text style={[styles.statVal, { color: '#1bdf8a' }]}>312</Text><Text style={styles.statLabel}>km</Text></View>
-              <View style={[styles.statCard, { borderColor: '#1bdf8a' }]}><Text style={[styles.statVal, { color: '#1bdf8a' }]}>4 200</Text><Text style={styles.statLabel}>m D+</Text></View>
+              <View style={[styles.statCard, { borderColor: '#5B52F0' }]}><Text style={[styles.statVal, { color: '#5B52F0' }]}>8</Text><Text style={styles.statLabel}>Sorties</Text></View>
+              <View style={[styles.statCard, { borderColor: '#5B52F0' }]}><Text style={[styles.statVal, { color: '#5B52F0' }]}>312</Text><Text style={styles.statLabel}>km</Text></View>
+              <View style={[styles.statCard, { borderColor: '#5B52F0' }]}><Text style={[styles.statVal, { color: '#5B52F0' }]}>4 200</Text><Text style={styles.statLabel}>m D+</Text></View>
             </View>
           </View>
         )}
 
-        {/* TAB SORTIES */}
         {activeTab === 'Sorties' && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Dernières sorties</Text>
@@ -142,26 +138,22 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* TAB INFOS */}
         {activeTab === 'Infos' && (
           <View style={styles.section}>
-
-            {/* Sport principal */}
             <Text style={styles.sectionTitle}>Sport principal</Text>
             <View style={styles.sportGrid}>
               {SPORTS.map(s => (
                 <TouchableOpacity
                   key={s.id}
-                  style={[styles.sportBtn, sportPrincipal === s.id && { borderColor: SPORT_COLORS[s.id], backgroundColor: SPORT_COLORS[s.id] + '15' }]}
+                  style={[styles.sportBtn, sportPrincipal === s.id && { borderColor: '#5B52F0', backgroundColor: '#EEEDFE' }]}
                   onPress={() => setSportPrincipal(s.id)}
                 >
                   <Text style={styles.sportEmoji}>{s.emoji}</Text>
-                  <Text style={[styles.sportLabel, sportPrincipal === s.id && { color: SPORT_COLORS[s.id], fontWeight: '600' }]}>{s.label}</Text>
+                  <Text style={[styles.sportLabel, sportPrincipal === s.id && { color: '#5B52F0', fontWeight: '600' }]}>{s.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* Sports secondaires */}
             <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Sports secondaires</Text>
             <View style={styles.sportGrid}>
               {SPORTS.map(s => (
@@ -170,28 +162,26 @@ export default function ProfileScreen() {
                   style={[
                     styles.sportBtn,
                     s.id === sportPrincipal && { opacity: 0.3 },
-                    sportsSecondaires.includes(s.id) && { borderColor: SPORT_COLORS[s.id], backgroundColor: SPORT_COLORS[s.id] + '15' }
+                    sportsSecondaires.includes(s.id) && { borderColor: '#5B52F0', backgroundColor: '#EEEDFE' }
                   ]}
                   onPress={() => toggleSecondaire(s.id)}
                   disabled={s.id === sportPrincipal}
                 >
                   <Text style={styles.sportEmoji}>{s.emoji}</Text>
-                  <Text style={[styles.sportLabel, sportsSecondaires.includes(s.id) && { color: SPORT_COLORS[s.id], fontWeight: '600' }]}>{s.label}</Text>
+                  <Text style={[styles.sportLabel, sportsSecondaires.includes(s.id) && { color: '#5B52F0', fontWeight: '600' }]}>{s.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* Zone géographique */}
             <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Zone géographique</Text>
             <View style={styles.zoneCard}>
               <Text style={styles.zoneEmoji}>📍</Text>
               <View>
-                <Text style={styles.zoneName}>Lyon </Text>
+                <Text style={styles.zoneName}>Lyon & alentours</Text>
                 <Text style={styles.zoneRadius}>Rayon de 50 km</Text>
               </View>
             </View>
 
-            {/* Créneaux préférés */}
             <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Créneaux préférés</Text>
             <View style={styles.creneauxGrid}>
               {CRENEAUX.map(c => (
@@ -204,7 +194,6 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-
           </View>
         )}
 
@@ -214,54 +203,54 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7f8fa', paddingTop: 56 },
+  container: { flex: 1, backgroundColor: '#F4F3FF', paddingTop: 56 },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
-  pageTitle: { fontSize: 26, fontWeight: '700', color: '#0d0d0d' },
-  settingsBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#eaecf0', alignItems: 'center', justifyContent: 'center' },
-  profileCard: { backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 16, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#eaecf0', marginBottom: 12 },
+  pageTitle: { fontSize: 26, fontWeight: '800', color: '#1a1a2e', letterSpacing: 1 },
+  settingsBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#DDD8FF', alignItems: 'center', justifyContent: 'center' },
+  profileCard: { backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 16, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#DDD8FF', marginBottom: 12 },
   avatarWrap: { marginBottom: 12 },
-  avatar: { width: 72, height: 72, borderRadius: 22, backgroundColor: '#1bdf8a', alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 72, height: 72, borderRadius: 22, backgroundColor: '#5B52F0', alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 26, fontWeight: '700', color: '#fff' },
-  profileName: { fontSize: 18, fontWeight: '700', color: '#0d0d0d', marginBottom: 4 },
+  profileName: { fontSize: 18, fontWeight: '700', color: '#1a1a2e', marginBottom: 4 },
   locationRow: { marginBottom: 8 },
-  locationText: { fontSize: 13, color: '#888' },
-  levelBadge: { backgroundColor: '#f0fdf7', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderColor: '#b6f0d5', marginBottom: 12 },
-  levelText: { fontSize: 12, fontWeight: '600', color: '#0a9e60' },
-  editBtn: { borderWidth: 1.5, borderColor: '#e0e2e8', borderRadius: 9, paddingHorizontal: 16, paddingVertical: 7, marginBottom: 16 },
-  editBtnText: { fontSize: 13, fontWeight: '500', color: '#555' },
+  locationText: { fontSize: 13, color: '#8888bb' },
+  levelBadge: { backgroundColor: '#EEEDFE', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderColor: '#DDD8FF', marginBottom: 12 },
+  levelText: { fontSize: 12, fontWeight: '600', color: '#5B52F0' },
+  editBtn: { borderWidth: 1.5, borderColor: '#DDD8FF', borderRadius: 9, paddingHorizontal: 16, paddingVertical: 7, marginBottom: 16 },
+  editBtnText: { fontSize: 13, fontWeight: '500', color: '#8888bb' },
   followRow: { flexDirection: 'row', alignItems: 'center', gap: 20 },
   followItem: { alignItems: 'center', gap: 2 },
-  followVal: { fontSize: 16, fontWeight: '700', color: '#0d0d0d' },
-  followLabel: { fontSize: 11, color: '#aaa' },
-  followDivider: { width: 1, height: 30, backgroundColor: '#eaecf0' },
-  tabs: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f0f0f0', marginBottom: 4 },
+  followVal: { fontSize: 16, fontWeight: '700', color: '#1a1a2e' },
+  followLabel: { fontSize: 11, color: '#8888bb' },
+  followDivider: { width: 1, height: 30, backgroundColor: '#DDD8FF' },
+  tabs: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#DDD8FF', marginBottom: 4 },
   tab: { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabActive: { borderBottomColor: '#1bdf8a' },
-  tabText: { fontSize: 13, fontWeight: '500', color: '#bbb' },
-  tabTextActive: { color: '#1bdf8a', fontWeight: '600' },
+  tabActive: { borderBottomColor: '#5B52F0' },
+  tabText: { fontSize: 13, fontWeight: '500', color: '#8888bb' },
+  tabTextActive: { color: '#5B52F0', fontWeight: '600' },
   section: { padding: 16 },
-  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#0d0d0d', marginBottom: 10 },
+  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#1a1a2e', marginBottom: 10 },
   statsGrid: { flexDirection: 'row', gap: 8 },
-  statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#eaecf0' },
-  statVal: { fontSize: 18, fontWeight: '700', color: '#0d0d0d' },
-  statLabel: { fontSize: 10, color: '#aaa', marginTop: 2 },
-  rideItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#eaecf0' },
+  statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#DDD8FF' },
+  statVal: { fontSize: 18, fontWeight: '700', color: '#1a1a2e' },
+  statLabel: { fontSize: 10, color: '#8888bb', marginTop: 2 },
+  rideItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#DDD8FF' },
   rideIcon: { width: 40, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  rideName: { fontSize: 13, fontWeight: '600', color: '#0d0d0d' },
-  rideDate: { fontSize: 11, color: '#aaa', marginTop: 1 },
+  rideName: { fontSize: 13, fontWeight: '600', color: '#1a1a2e' },
+  rideDate: { fontSize: 11, color: '#8888bb', marginTop: 1 },
   rideStats: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  rideStat: { fontSize: 12, fontWeight: '600', color: '#555' },
+  rideStat: { fontSize: 12, fontWeight: '600', color: '#5B52F0' },
   sportGrid: { flexDirection: 'row', gap: 8 },
-  sportBtn: { flex: 1, alignItems: 'center', padding: 10, borderRadius: 12, borderWidth: 1.5, borderColor: '#e8eaed', backgroundColor: '#fff' },
+  sportBtn: { flex: 1, alignItems: 'center', padding: 10, borderRadius: 12, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff' },
   sportEmoji: { fontSize: 20, marginBottom: 4 },
-  sportLabel: { fontSize: 11, color: '#888' },
-  zoneCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#eaecf0' },
+  sportLabel: { fontSize: 11, color: '#8888bb' },
+  zoneCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#DDD8FF' },
   zoneEmoji: { fontSize: 24 },
-  zoneName: { fontSize: 14, fontWeight: '600', color: '#0d0d0d' },
-  zoneRadius: { fontSize: 12, color: '#aaa', marginTop: 2 },
+  zoneName: { fontSize: 14, fontWeight: '600', color: '#1a1a2e' },
+  zoneRadius: { fontSize: 12, color: '#8888bb', marginTop: 2 },
   creneauxGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  creneauBtn: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5, borderColor: '#e8eaed', backgroundColor: '#fff' },
-  creneauBtnActive: { backgroundColor: '#1bdf8a', borderColor: '#1bdf8a' },
-  creneauText: { fontSize: 13, fontWeight: '500', color: '#555' },
+  creneauBtn: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff' },
+  creneauBtnActive: { backgroundColor: '#5B52F0', borderColor: '#5B52F0' },
+  creneauText: { fontSize: 13, fontWeight: '500', color: '#8888bb' },
   creneauTextActive: { color: '#fff' },
 });

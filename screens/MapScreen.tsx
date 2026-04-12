@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import MapView, { Marker, Callout } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 
 const SPORTS_FILTERS = [
   { id: 'all', label: 'Tous' },
@@ -19,7 +19,7 @@ const RIDES = [
 ];
 
 const SPORT_COLORS: { [key: string]: string } = {
-  route: '#2196f3', vtt: '#f59f00', trail: '#1bdf8a', running: '#9c27b0'
+  route: '#4F46E5', vtt: '#f59f00', trail: '#5B52F0', running: '#A78BFA'
 };
 
 export default function MapScreen() {
@@ -31,7 +31,6 @@ export default function MapScreen() {
   return (
     <View style={styles.container}>
 
-      {/* CARTE */}
       <MapView
         style={styles.map}
         initialRegion={{
@@ -55,7 +54,6 @@ export default function MapScreen() {
         ))}
       </MapView>
 
-      {/* FILTRES EN HAUT */}
       <View style={styles.filtersContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
           {SPORTS_FILTERS.map(s => (
@@ -70,7 +68,6 @@ export default function MapScreen() {
         </ScrollView>
       </View>
 
-      {/* CARTE SORTIE EN BAS */}
       {selectedRide && (
         <View style={styles.rideCard}>
           <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedRide(null)}>
@@ -121,11 +118,11 @@ const styles = StyleSheet.create({
   },
   chip: {
     paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 20, borderWidth: 1.5, borderColor: '#e0e2e8',
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 20, borderWidth: 1.5, borderColor: '#DDD8FF',
+    backgroundColor: 'rgba(255,255,255,0.97)',
   },
-  chipActive: { backgroundColor: '#1bdf8a', borderColor: '#1bdf8a' },
-  chipText: { fontSize: 12, fontWeight: '500', color: '#555' },
+  chipActive: { backgroundColor: '#5B52F0', borderColor: '#5B52F0' },
+  chipText: { fontSize: 12, fontWeight: '500', color: '#8888bb' },
   chipTextActive: { color: '#fff' },
   marker: {
     width: 44, height: 44, borderRadius: 22,
@@ -138,26 +135,26 @@ const styles = StyleSheet.create({
   rideCard: {
     position: 'absolute', bottom: 16, left: 12, right: 12,
     backgroundColor: '#fff', borderRadius: 16,
-    padding: 16, borderWidth: 1, borderColor: '#eaecf0',
-    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12,
+    padding: 16, borderWidth: 1, borderColor: '#DDD8FF',
+    shadowColor: '#5B52F0', shadowOpacity: 0.1, shadowRadius: 12,
     elevation: 6,
   },
   closeBtn: {
     position: 'absolute', top: 10, right: 12,
     width: 24, height: 24, borderRadius: 12,
-    backgroundColor: '#f0f0f0', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#EEEDFE', alignItems: 'center', justifyContent: 'center',
   },
-  closeBtnText: { fontSize: 12, color: '#888' },
+  closeBtnText: { fontSize: 12, color: '#5B52F0' },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   cardIcon: { width: 40, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: '#0d0d0d' },
-  cardSport: { fontSize: 12, color: '#aaa', marginTop: 1 },
+  cardTitle: { fontSize: 15, fontWeight: '600', color: '#1a1a2e' },
+  cardSport: { fontSize: 12, color: '#8888bb', marginTop: 1 },
   cardStats: { flexDirection: 'row', gap: 16, marginBottom: 12 },
   cardStat: {},
-  cardStatLabel: { fontSize: 11, color: '#aaa' },
-  cardStatVal: { fontSize: 13, fontWeight: '600', color: '#0d0d0d' },
+  cardStatLabel: { fontSize: 11, color: '#8888bb' },
+  cardStatVal: { fontSize: 13, fontWeight: '600', color: '#1a1a2e' },
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  going: { fontSize: 12, color: '#888' },
-  joinBtn: { backgroundColor: '#1bdf8a', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 18 },
+  going: { fontSize: 12, color: '#8888bb' },
+  joinBtn: { backgroundColor: '#5B52F0', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 18 },
   joinText: { color: '#fff', fontWeight: '600', fontSize: 13 },
 });

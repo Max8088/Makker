@@ -9,7 +9,7 @@ const SPORTS = [
 ];
 
 const LEVELS = [
-  { id: 'facile', label: 'Facile', color: '#1bdf8a' },
+  { id: 'facile', label: 'Facile', color: '#22c55e' },
   { id: 'intermediaire', label: 'Intermédiaire', color: '#f59f00' },
   { id: 'difficile', label: 'Difficile', color: '#e05c3a' },
 ];
@@ -36,19 +36,17 @@ export default function CreateScreen() {
 
       <ScrollView style={styles.form} contentContainerStyle={{ padding: 16, gap: 16 }}>
 
-        {/* Titre */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Titre de la sortie</Text>
           <TextInput
             style={styles.input}
             placeholder="ex: Sortie Croix-Rousse matinale"
-            placeholderTextColor="#bbb"
+            placeholderTextColor="#bbbbdd"
             value={title}
             onChangeText={setTitle}
           />
         </View>
 
-        {/* Sport */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Sport</Text>
           <View style={styles.sportGrid}>
@@ -65,37 +63,33 @@ export default function CreateScreen() {
           </View>
         </View>
 
-        {/* Date et heure */}
         <View style={styles.row}>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
             <Text style={styles.label}>Date</Text>
-            <TextInput style={styles.input} placeholder="12/04/2026" placeholderTextColor="#bbb" value={date} onChangeText={setDate} />
+            <TextInput style={styles.input} placeholder="12/04/2026" placeholderTextColor="#bbbbdd" value={date} onChangeText={setDate} />
           </View>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
             <Text style={styles.label}>Heure</Text>
-            <TextInput style={styles.input} placeholder="07:00" placeholderTextColor="#bbb" value={time} onChangeText={setTime} />
+            <TextInput style={styles.input} placeholder="07:00" placeholderTextColor="#bbbbdd" value={time} onChangeText={setTime} />
           </View>
         </View>
 
-        {/* Distance et dénivelé */}
         <View style={styles.row}>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
             <Text style={styles.label}>Distance (km)</Text>
-            <TextInput style={styles.input} placeholder="45" placeholderTextColor="#bbb" keyboardType="numeric" value={distance} onChangeText={setDistance} />
+            <TextInput style={styles.input} placeholder="45" placeholderTextColor="#bbbbdd" keyboardType="numeric" value={distance} onChangeText={setDistance} />
           </View>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
             <Text style={styles.label}>Dénivelé (m)</Text>
-            <TextInput style={styles.input} placeholder="680" placeholderTextColor="#bbb" keyboardType="numeric" value={elevation} onChangeText={setElevation} />
+            <TextInput style={styles.input} placeholder="680" placeholderTextColor="#bbbbdd" keyboardType="numeric" value={elevation} onChangeText={setElevation} />
           </View>
         </View>
 
-        {/* Allure */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Allure / Vitesse</Text>
-          <TextInput style={styles.input} placeholder="ex: 28 km/h ou 6:30 /km" placeholderTextColor="#bbb" value={pace} onChangeText={setPace} />
+          <TextInput style={styles.input} placeholder="ex: 28 km/h ou 6:30 /km" placeholderTextColor="#bbbbdd" value={pace} onChangeText={setPace} />
         </View>
 
-        {/* Niveau */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Niveau</Text>
           <View style={styles.levelRow}>
@@ -111,7 +105,6 @@ export default function CreateScreen() {
           </View>
         </View>
 
-        {/* Participants */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Participants max</Text>
           <View style={styles.participantsRow}>
@@ -125,19 +118,17 @@ export default function CreateScreen() {
           </View>
         </View>
 
-        {/* Point de rendez-vous */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Point de rendez-vous</Text>
-          <TextInput style={styles.input} placeholder="ex: Parking Croix-Rousse" placeholderTextColor="#bbb" value={location} onChangeText={setLocation} />
+          <TextInput style={styles.input} placeholder="ex: Parking Croix-Rousse" placeholderTextColor="#bbbbdd" value={location} onChangeText={setLocation} />
         </View>
 
-        {/* Description */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Description <Text style={styles.optional}>(optionnel)</Text></Text>
           <TextInput
             style={[styles.input, styles.textarea]}
             placeholder="Décris la sortie, conseils, matériel..."
-            placeholderTextColor="#bbb"
+            placeholderTextColor="#bbbbdd"
             multiline
             numberOfLines={3}
             value={description}
@@ -145,7 +136,6 @@ export default function CreateScreen() {
           />
         </View>
 
-        {/* Bouton publier */}
         <TouchableOpacity style={styles.publishBtn}>
           <Text style={styles.publishText}>Publier la sortie</Text>
         </TouchableOpacity>
@@ -157,30 +147,30 @@ export default function CreateScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7f8fa', paddingTop: 56 },
+  container: { flex: 1, backgroundColor: '#F4F3FF', paddingTop: 56 },
   header: { paddingHorizontal: 20, marginBottom: 12 },
-  title: { fontSize: 26, fontWeight: '700', color: '#0d0d0d' },
-  subtitle: { fontSize: 13, color: '#aaa', marginTop: 2 },
+  title: { fontSize: 26, fontWeight: '800', color: '#1a1a2e', letterSpacing: 1 },
+  subtitle: { fontSize: 13, color: '#8888bb', marginTop: 2 },
   form: { flex: 1 },
   fieldGroup: { gap: 6 },
-  label: { fontSize: 12, fontWeight: '600', color: '#555' },
-  optional: { fontSize: 12, fontWeight: '400', color: '#bbb' },
-  input: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#e8eaed', padding: 11, fontSize: 13, color: '#0d0d0d' },
+  label: { fontSize: 12, fontWeight: '600', color: '#8888bb' },
+  optional: { fontSize: 12, fontWeight: '400', color: '#bbbbdd' },
+  input: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', padding: 11, fontSize: 13, color: '#1a1a2e' },
   textarea: { height: 80, textAlignVertical: 'top' },
   row: { flexDirection: 'row', gap: 10 },
   sportGrid: { flexDirection: 'row', gap: 8 },
-  sportBtn: { flex: 1, alignItems: 'center', padding: 10, borderRadius: 12, borderWidth: 1.5, borderColor: '#e8eaed', backgroundColor: '#fff' },
-  sportBtnActive: { borderColor: '#1bdf8a', backgroundColor: '#f0fdf7' },
+  sportBtn: { flex: 1, alignItems: 'center', padding: 10, borderRadius: 12, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff' },
+  sportBtnActive: { borderColor: '#5B52F0', backgroundColor: '#EEEDFE' },
   sportEmoji: { fontSize: 20, marginBottom: 4 },
-  sportLabel: { fontSize: 11, fontWeight: '500', color: '#888' },
-  sportLabelActive: { color: '#0a9e60' },
+  sportLabel: { fontSize: 11, fontWeight: '500', color: '#8888bb' },
+  sportLabelActive: { color: '#5B52F0' },
   levelRow: { flexDirection: 'row', gap: 8 },
-  levelBtn: { flex: 1, padding: 9, borderRadius: 10, borderWidth: 1.5, borderColor: '#e8eaed', backgroundColor: '#fff', alignItems: 'center' },
-  levelText: { fontSize: 11, fontWeight: '600', color: '#888' },
-  participantsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#e8eaed', padding: 10 },
-  pBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#f5f6f8', borderWidth: 1, borderColor: '#e8eaed', alignItems: 'center', justifyContent: 'center' },
-  pBtnText: { fontSize: 18, color: '#555', lineHeight: 22 },
-  pVal: { fontSize: 18, fontWeight: '600', color: '#0d0d0d' },
-  publishBtn: { backgroundColor: '#1bdf8a', borderRadius: 12, padding: 15, alignItems: 'center', marginTop: 8 },
+  levelBtn: { flex: 1, padding: 9, borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff', alignItems: 'center' },
+  levelText: { fontSize: 11, fontWeight: '600', color: '#8888bb' },
+  participantsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', padding: 10 },
+  pBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#EEEDFE', borderWidth: 1, borderColor: '#DDD8FF', alignItems: 'center', justifyContent: 'center' },
+  pBtnText: { fontSize: 18, color: '#5B52F0', lineHeight: 22 },
+  pVal: { fontSize: 18, fontWeight: '600', color: '#1a1a2e' },
+  publishBtn: { backgroundColor: '#5B52F0', borderRadius: 12, padding: 15, alignItems: 'center', marginTop: 8 },
   publishText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

@@ -30,12 +30,12 @@ export default function App() {
           headerShown: false,
           tabBarStyle: {
             backgroundColor: '#fff',
-            borderTopColor: '#eaecf0',
+            borderTopColor: '#DDD8FF',
             height: 70,
             paddingBottom: 12,
             paddingTop: 8,
           },
-          tabBarActiveTintColor: '#1bdf8a',
+          tabBarActiveTintColor: '#5B52F0',
           tabBarInactiveTintColor: '#bbb',
           tabBarIcon: ({ color }) => <TabIcon color={color} sport={route.name} />,
         })}
@@ -49,10 +49,10 @@ export default function App() {
             tabBarIcon: () => (
               <View style={{
                 width: 50, height: 50, borderRadius: 14,
-                backgroundColor: '#1bdf8a',
+                backgroundColor: '#5B52F0',
                 alignItems: 'center', justifyContent: 'center',
                 marginBottom: 16,
-                shadowColor: '#1bdf8a', shadowOpacity: 0.4,
+                shadowColor: '#5B52F0', shadowOpacity: 0.4,
                 shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
                 elevation: 6,
               }}>
