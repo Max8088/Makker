@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, Circle } from 'react-native-maps';
+import * as Location from 'expo-location';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 
 const SPORTS_FILTERS = [
@@ -34,14 +36,56 @@ type Sortie = {
   longitude: number;
 };
 
+type UserLocation = {
+  latitude: number;
+  longitude: number;
+};
+
 export default function MapScreen() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [sorties, setSorties] = useState<Sortie[]>([]);
   const [selectedRide, setSelectedRide] = useState<Sortie | null>(null);
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+  const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
     fetchSorties();
   }, []);
+  
+  useFocusEffect(
+    React.useCallback(() => {
+      getUserLocation();
+      fetchSorties();
+    }, [])
+  );
+
+  const getUserLocation = async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission refusée',
+        'Active la localisation pour voir les sorties près de toi.',
+      );
+      return;
+    }
+
+    const location = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    });
+
+    const coords = {
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+    };
+
+    setUserLocation(coords);
+
+    mapRef.current?.animateToRegion({
+      ...coords,
+      latitudeDelta: 0.15,
+      longitudeDelta: 0.15,
+    }, 800);
+  };
 
   const fetchSorties = async () => {
     const { data, error } = await supabase
@@ -70,6 +114,18 @@ export default function MapScreen() {
     }
   };
 
+  const centerOnUser = () => {
+    if (userLocation) {
+      mapRef.current?.animateToRegion({
+        ...userLocation,
+        latitudeDelta: 0.1,
+        longitudeDelta: 0.1,
+      }, 600);
+    } else {
+      getUserLocation();
+    }
+  };
+
   const filtered = activeFilter === 'all'
     ? sorties
     : sorties.filter(s => s.sport === activeFilter);
@@ -78,6 +134,7 @@ export default function MapScreen() {
     <View style={styles.container}>
 
       <MapView
+        ref={mapRef}
         style={styles.map}
         initialRegion={{
           latitude: 45.7490,
@@ -86,7 +143,27 @@ export default function MapScreen() {
           longitudeDelta: 0.15,
         }}
         onPress={() => setSelectedRide(null)}
+        showsUserLocation={false}
       >
+        {/* Point bleu position utilisateur */}
+        {userLocation && (
+          <>
+            <Circle
+              center={userLocation}
+              radius={300}
+              fillColor="rgba(91,82,240,0.15)"
+              strokeColor="rgba(91,82,240,0.3)"
+              strokeWidth={1}
+            />
+            <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }}>
+              <View style={styles.userDot}>
+                <View style={styles.userDotInner} />
+              </View>
+            </Marker>
+          </>
+        )}
+
+        {/* Marqueurs des sorties */}
         {filtered.map(ride => (
           <Marker
             key={ride.id}
@@ -100,6 +177,7 @@ export default function MapScreen() {
         ))}
       </MapView>
 
+      {/* Filtres */}
       <View style={styles.filtersContainer}>
         <ScrollView
           horizontal
@@ -118,6 +196,12 @@ export default function MapScreen() {
         </ScrollView>
       </View>
 
+      {/* Bouton centrer sur ma position */}
+      <TouchableOpacity style={styles.locateBtn} onPress={centerOnUser}>
+        <Text style={styles.locateBtnText}>📍</Text>
+      </TouchableOpacity>
+
+      {/* Carte sortie sélectionnée */}
       {selectedRide && (
         <View style={styles.rideCard}>
           <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedRide(null)}>
@@ -175,6 +259,16 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: '#5B52F0', borderColor: '#5B52F0' },
   chipText: { fontSize: 12, fontWeight: '500', color: '#8888bb' },
   chipTextActive: { color: '#fff' },
+  userDot: {
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: 'rgba(91,82,240,0.25)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: '#fff',
+  },
+  userDotInner: {
+    width: 10, height: 10, borderRadius: 5,
+    backgroundColor: '#5B52F0',
+  },
   marker: {
     width: 44, height: 44, borderRadius: 22,
     alignItems: 'center', justifyContent: 'center',
@@ -183,6 +277,16 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   markerEmoji: { fontSize: 20 },
+  locateBtn: {
+    position: 'absolute', bottom: 100, right: 16,
+    width: 44, height: 44, borderRadius: 12,
+    backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#DDD8FF',
+    shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8,
+    elevation: 4,
+  },
+  locateBtnText: { fontSize: 20 },
   rideCard: {
     position: 'absolute', bottom: 16, left: 12, right: 12,
     backgroundColor: '#fff', borderRadius: 16,
