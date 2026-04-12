@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
+import { supabase } from '../lib/supabase';
 
 const SPORTS_FILTERS = [
   { id: 'all', label: 'Tous' },
@@ -10,23 +11,68 @@ const SPORTS_FILTERS = [
   { id: 'running', label: 'Running' },
 ];
 
-const RIDES = [
-  { id: 1, title: 'Sortie Croix-Rousse', sport: 'route', emoji: '🚴', distance: '52km', elevation: '780m', pace: '28km/h', going: 3, max: 8, latitude: 45.7676, longitude: 4.8344 },
-  { id: 2, title: 'Trail Monts du Lyonnais', sport: 'trail', emoji: '🏔️', distance: '18km', elevation: '950m', pace: '7:00/km', going: 4, max: 6, latitude: 45.7200, longitude: 4.7500 },
-  { id: 3, title: 'VTT Pilat', sport: 'vtt', emoji: '🚵', distance: '35km', elevation: '1100m', pace: '18km/h', going: 2, max: 6, latitude: 45.6900, longitude: 4.8900 },
-  { id: 4, title: 'Running Tête d\'Or', sport: 'running', emoji: '🏃', distance: '10km', elevation: '60m', pace: '5:30/km', going: 5, max: 10, latitude: 45.7780, longitude: 4.8550 },
-  { id: 5, title: 'Col de la Luère', sport: 'route', emoji: '🚴', distance: '68km', elevation: '1200m', pace: '25km/h', going: 6, max: 12, latitude: 45.7400, longitude: 4.7200 },
-];
-
 const SPORT_COLORS: { [key: string]: string } = {
   route: '#4F46E5', vtt: '#f59f00', trail: '#5B52F0', running: '#A78BFA'
 };
 
+const SPORT_EMOJIS: { [key: string]: string } = {
+  route: '🚴', vtt: '🚵', trail: '🏔️', running: '🏃'
+};
+
+type Sortie = {
+  id: string;
+  titre: string;
+  sport: string;
+  distance: string;
+  elevation: string;
+  allure: string;
+  lieu: string;
+  date_sortie: string;
+  heure: string;
+  participants_max: number;
+  latitude: number;
+  longitude: number;
+};
+
 export default function MapScreen() {
   const [activeFilter, setActiveFilter] = useState('all');
-  const [selectedRide, setSelectedRide] = useState<typeof RIDES[0] | null>(null);
+  const [sorties, setSorties] = useState<Sortie[]>([]);
+  const [selectedRide, setSelectedRide] = useState<Sortie | null>(null);
 
-  const filtered = activeFilter === 'all' ? RIDES : RIDES.filter(r => r.sport === activeFilter);
+  useEffect(() => {
+    fetchSorties();
+  }, []);
+
+  const fetchSorties = async () => {
+    const { data, error } = await supabase
+      .from('sorties')
+      .select('*')
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null);
+
+    if (!error) setSorties(data || []);
+  };
+
+  const handleRejoindre = async (sortieId: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase.from('participations').insert({
+      sortie_id: sortieId,
+      user_id: user.id,
+    });
+
+    if (error) {
+      Alert.alert('Erreur', 'Tu as peut-être déjà rejoint cette sortie.');
+    } else {
+      Alert.alert('Super ! 🎉', 'Tu as rejoint la sortie !');
+      setSelectedRide(null);
+    }
+  };
+
+  const filtered = activeFilter === 'all'
+    ? sorties
+    : sorties.filter(s => s.sport === activeFilter);
 
   return (
     <View style={styles.container}>
@@ -48,14 +94,18 @@ export default function MapScreen() {
             onPress={() => setSelectedRide(ride)}
           >
             <View style={[styles.marker, { backgroundColor: SPORT_COLORS[ride.sport] }]}>
-              <Text style={styles.markerEmoji}>{ride.emoji}</Text>
+              <Text style={styles.markerEmoji}>{SPORT_EMOJIS[ride.sport]}</Text>
             </View>
           </Marker>
         ))}
       </MapView>
 
       <View style={styles.filtersContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}
+        >
           {SPORTS_FILTERS.map(s => (
             <TouchableOpacity
               key={s.id}
@@ -75,30 +125,31 @@ export default function MapScreen() {
           </TouchableOpacity>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIcon, { backgroundColor: SPORT_COLORS[selectedRide.sport] + '20' }]}>
-              <Text style={{ fontSize: 22 }}>{selectedRide.emoji}</Text>
+              <Text style={{ fontSize: 22 }}>{SPORT_EMOJIS[selectedRide.sport]}</Text>
             </View>
-            <View>
-              <Text style={styles.cardTitle}>{selectedRide.title}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>{selectedRide.titre}</Text>
               <Text style={styles.cardSport}>{selectedRide.sport.charAt(0).toUpperCase() + selectedRide.sport.slice(1)}</Text>
             </View>
           </View>
           <View style={styles.cardStats}>
             <View style={styles.cardStat}>
               <Text style={styles.cardStatLabel}>Distance</Text>
-              <Text style={styles.cardStatVal}>{selectedRide.distance}</Text>
+              <Text style={styles.cardStatVal}>{selectedRide.distance} km</Text>
             </View>
             <View style={styles.cardStat}>
               <Text style={styles.cardStatLabel}>Dénivelé</Text>
-              <Text style={styles.cardStatVal}>{selectedRide.elevation}</Text>
+              <Text style={styles.cardStatVal}>{selectedRide.elevation} m</Text>
             </View>
             <View style={styles.cardStat}>
               <Text style={styles.cardStatLabel}>Allure</Text>
-              <Text style={styles.cardStatVal}>{selectedRide.pace}</Text>
+              <Text style={styles.cardStatVal}>{selectedRide.allure}</Text>
             </View>
           </View>
+          <Text style={styles.cardMeta}>📍 {selectedRide.lieu}  ·  📅 {selectedRide.date_sortie} à {selectedRide.heure}</Text>
           <View style={styles.cardFooter}>
-            <Text style={styles.going}>{selectedRide.going}/{selectedRide.max} participants</Text>
-            <TouchableOpacity style={styles.joinBtn}>
+            <Text style={styles.going}>Max {selectedRide.participants_max} participants</Text>
+            <TouchableOpacity style={styles.joinBtn} onPress={() => handleRejoindre(selectedRide.id)}>
               <Text style={styles.joinText}>Rejoindre</Text>
             </TouchableOpacity>
           </View>
@@ -149,10 +200,11 @@ const styles = StyleSheet.create({
   cardIcon: { width: 40, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   cardTitle: { fontSize: 15, fontWeight: '600', color: '#1a1a2e' },
   cardSport: { fontSize: 12, color: '#8888bb', marginTop: 1 },
-  cardStats: { flexDirection: 'row', gap: 16, marginBottom: 12 },
+  cardStats: { flexDirection: 'row', gap: 16, marginBottom: 8 },
   cardStat: {},
   cardStatLabel: { fontSize: 11, color: '#8888bb' },
   cardStatVal: { fontSize: 13, fontWeight: '600', color: '#1a1a2e' },
+  cardMeta: { fontSize: 12, color: '#8888bb', marginBottom: 12 },
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   going: { fontSize: 12, color: '#8888bb' },
   joinBtn: { backgroundColor: '#5B52F0', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 18 },

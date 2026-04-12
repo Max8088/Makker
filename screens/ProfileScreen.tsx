@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { supabase } from '../lib/supabase';
 
 const SPORTS = [
   { id: 'route', label: 'Route', emoji: '🚴' },
@@ -15,24 +16,97 @@ const CRENEAUX = [
   { id: 'weekend', label: '📅 Weekend' },
 ];
 
-const PAST_RIDES = [
-  { id: 1, title: 'Sortie Croix-Rousse', sport: 'route', emoji: '🚴', date: '8 Avr', distance: '52km', elevation: '780m' },
-  { id: 2, title: 'Trail Monts du Lyonnais', sport: 'trail', emoji: '🏔️', date: '5 Avr', distance: '18km', elevation: '950m' },
-  { id: 3, title: 'VTT Pilat', sport: 'vtt', emoji: '🚵', date: '2 Avr', distance: '35km', elevation: '1100m' },
-  { id: 4, title: 'Running Tête d\'Or', sport: 'running', emoji: '🏃', date: '30 Mar', distance: '10km', elevation: '60m' },
-];
-
 const SPORT_COLORS: { [key: string]: string } = {
   route: '#4F46E5', vtt: '#f59f00', trail: '#5B52F0', running: '#A78BFA'
 };
 
+const SPORT_EMOJIS: { [key: string]: string } = {
+  route: '🚴', vtt: '🚵', trail: '🏔️', running: '🏃'
+};
+
 const TABS = ['Statistiques', 'Sorties', 'Infos'];
+
+type Profile = {
+  id: string;
+  prenom: string;
+  nom: string;
+  ville: string;
+  sport_principal: string;
+  niveau: string;
+};
+
+type Sortie = {
+  id: string;
+  titre: string;
+  sport: string;
+  distance: string;
+  elevation: string;
+  date_sortie: string;
+};
 
 export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState('Statistiques');
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [sorties, setSorties] = useState<Sortie[]>([]);
   const [sportPrincipal, setSportPrincipal] = useState('route');
-  const [sportsSecondaires, setSportsSecondaires] = useState<string[]>(['trail']);
+  const [sportsSecondaires, setSportsSecondaires] = useState<string[]>([]);
   const [creneaux, setCreneaux] = useState<string[]>(['matin', 'weekend']);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchProfile();
+    fetchSorties();
+  }, []);
+
+  const fetchProfile = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (data) {
+      setProfile(data);
+      setSportPrincipal(data.sport_principal || 'route');
+    }
+    setLoading(false);
+  };
+
+  const fetchSorties = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data } = await supabase
+      .from('sorties')
+      .select('id, titre, sport, distance, elevation, date_sortie')
+      .eq('createur_id', user.id)
+      .order('created_at', { ascending: false });
+
+    setSorties(data || []);
+  };
+
+  const saveProfile = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ sport_principal: sportPrincipal })
+      .eq('id', user.id);
+
+    if (error) {
+      Alert.alert('Erreur', error.message);
+    } else {
+      Alert.alert('Profil mis à jour ! ✅', '');
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
 
   const toggleSecondaire = (id: string) => {
     if (id === sportPrincipal) return;
@@ -47,12 +121,20 @@ export default function ProfileScreen() {
     );
   };
 
+  const initiales = profile
+    ? `${profile.prenom?.[0] || ''}${profile.nom?.[0] || ''}`.toUpperCase()
+    : '?';
+
+  const nomComplet = profile
+    ? `${profile.prenom || ''} ${profile.nom || ''}`.trim()
+    : 'Chargement...';
+
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
         <Text style={styles.pageTitle}>Profil</Text>
-        <TouchableOpacity style={styles.settingsBtn}>
-          <Text style={{ fontSize: 18 }}>⚙️</Text>
+        <TouchableOpacity style={styles.settingsBtn} onPress={handleLogout}>
+          <Text style={{ fontSize: 16 }}>🚪</Text>
         </TouchableOpacity>
       </View>
 
@@ -61,28 +143,25 @@ export default function ProfileScreen() {
         <View style={styles.profileCard}>
           <View style={styles.avatarWrap}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>AM</Text>
+              <Text style={styles.avatarText}>{initiales}</Text>
             </View>
           </View>
-          <Text style={styles.profileName}>Alex Morgan</Text>
+          <Text style={styles.profileName}>{nomComplet}</Text>
           <View style={styles.locationRow}>
-            <Text style={styles.locationText}>📍 Lyon, France</Text>
+            <Text style={styles.locationText}>📍 {profile?.ville || 'Lyon, France'}</Text>
           </View>
           <View style={styles.levelBadge}>
-            <Text style={styles.levelText}>📈 Niveau Intermédiaire</Text>
+            <Text style={styles.levelText}>📈 Niveau {profile?.niveau || 'Intermédiaire'}</Text>
           </View>
-          <TouchableOpacity style={styles.editBtn}>
-            <Text style={styles.editBtnText}>✏️ Modifier le profil</Text>
-          </TouchableOpacity>
           <View style={styles.followRow}>
             <View style={styles.followItem}>
-              <Text style={styles.followVal}>234</Text>
-              <Text style={styles.followLabel}>Abonnés</Text>
+              <Text style={styles.followVal}>{sorties.length}</Text>
+              <Text style={styles.followLabel}>Sorties</Text>
             </View>
             <View style={styles.followDivider} />
             <View style={styles.followItem}>
-              <Text style={styles.followVal}>189</Text>
-              <Text style={styles.followLabel}>Abonnements</Text>
+              <Text style={styles.followVal}>{SPORT_EMOJIS[sportPrincipal]}</Text>
+              <Text style={styles.followLabel}>Sport principal</Text>
             </View>
             <View style={styles.followDivider} />
             <View style={styles.followItem}>
@@ -94,7 +173,11 @@ export default function ProfileScreen() {
 
         <View style={styles.tabs}>
           {TABS.map(tab => (
-            <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && styles.tabActive]} onPress={() => setActiveTab(tab)}>
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tab, activeTab === tab && styles.tabActive]}
+              onPress={() => setActiveTab(tab)}
+            >
               <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
             </TouchableOpacity>
           ))}
@@ -102,39 +185,48 @@ export default function ProfileScreen() {
 
         {activeTab === 'Statistiques' && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Global</Text>
+            <Text style={styles.sectionTitle}>Mes sorties créées</Text>
             <View style={styles.statsGrid}>
-              <View style={styles.statCard}><Text style={styles.statVal}>127</Text><Text style={styles.statLabel}>Sorties</Text></View>
-              <View style={styles.statCard}><Text style={styles.statVal}>3 450</Text><Text style={styles.statLabel}>km total</Text></View>
-              <View style={styles.statCard}><Text style={styles.statVal}>42 500</Text><Text style={styles.statLabel}>m D+</Text></View>
-            </View>
-            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Ce mois-ci</Text>
-            <View style={styles.statsGrid}>
-              <View style={[styles.statCard, { borderColor: '#5B52F0' }]}><Text style={[styles.statVal, { color: '#5B52F0' }]}>8</Text><Text style={styles.statLabel}>Sorties</Text></View>
-              <View style={[styles.statCard, { borderColor: '#5B52F0' }]}><Text style={[styles.statVal, { color: '#5B52F0' }]}>312</Text><Text style={styles.statLabel}>km</Text></View>
-              <View style={[styles.statCard, { borderColor: '#5B52F0' }]}><Text style={[styles.statVal, { color: '#5B52F0' }]}>4 200</Text><Text style={styles.statLabel}>m D+</Text></View>
+              <View style={styles.statCard}>
+                <Text style={styles.statVal}>{sorties.length}</Text>
+                <Text style={styles.statLabel}>Sorties</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statVal}>—</Text>
+                <Text style={styles.statLabel}>km total</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statVal}>—</Text>
+                <Text style={styles.statLabel}>m D+</Text>
+              </View>
             </View>
           </View>
         )}
 
         {activeTab === 'Sorties' && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Dernières sorties</Text>
-            {PAST_RIDES.map(ride => (
-              <View key={ride.id} style={styles.rideItem}>
-                <View style={[styles.rideIcon, { backgroundColor: SPORT_COLORS[ride.sport] + '20' }]}>
-                  <Text style={{ fontSize: 20 }}>{ride.emoji}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.rideName}>{ride.title}</Text>
-                  <Text style={styles.rideDate}>{ride.date}</Text>
-                  <View style={styles.rideStats}>
-                    <Text style={styles.rideStat}>{ride.distance}</Text>
-                    <Text style={styles.rideStat}>↗ {ride.elevation}</Text>
+            <Text style={styles.sectionTitle}>Mes sorties créées</Text>
+            {sorties.length === 0 ? (
+              <Text style={{ color: '#8888bb', fontSize: 13, textAlign: 'center', marginTop: 20 }}>
+                Tu n'as pas encore créé de sortie 🚴
+              </Text>
+            ) : (
+              sorties.map(ride => (
+                <View key={ride.id} style={styles.rideItem}>
+                  <View style={[styles.rideIcon, { backgroundColor: SPORT_COLORS[ride.sport] + '20' }]}>
+                    <Text style={{ fontSize: 20 }}>{SPORT_EMOJIS[ride.sport]}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rideName}>{ride.titre}</Text>
+                    <Text style={styles.rideDate}>{ride.date_sortie}</Text>
+                    <View style={styles.rideStats}>
+                      <Text style={styles.rideStat}>{ride.distance} km</Text>
+                      <Text style={styles.rideStat}>↗ {ride.elevation} m</Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-            ))}
+              ))
+            )}
           </View>
         )}
 
@@ -177,7 +269,7 @@ export default function ProfileScreen() {
             <View style={styles.zoneCard}>
               <Text style={styles.zoneEmoji}>📍</Text>
               <View>
-                <Text style={styles.zoneName}>Lyon & alentours</Text>
+                <Text style={styles.zoneName}>{profile?.ville || 'Lyon'} & alentours</Text>
                 <Text style={styles.zoneRadius}>Rayon de 50 km</Text>
               </View>
             </View>
@@ -194,6 +286,11 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            <TouchableOpacity style={styles.saveBtn} onPress={saveProfile}>
+              <Text style={styles.saveBtnText}>Enregistrer les modifications</Text>
+            </TouchableOpacity>
+
           </View>
         )}
 
@@ -216,8 +313,6 @@ const styles = StyleSheet.create({
   locationText: { fontSize: 13, color: '#8888bb' },
   levelBadge: { backgroundColor: '#EEEDFE', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderColor: '#DDD8FF', marginBottom: 12 },
   levelText: { fontSize: 12, fontWeight: '600', color: '#5B52F0' },
-  editBtn: { borderWidth: 1.5, borderColor: '#DDD8FF', borderRadius: 9, paddingHorizontal: 16, paddingVertical: 7, marginBottom: 16 },
-  editBtnText: { fontSize: 13, fontWeight: '500', color: '#8888bb' },
   followRow: { flexDirection: 'row', alignItems: 'center', gap: 20 },
   followItem: { alignItems: 'center', gap: 2 },
   followVal: { fontSize: 16, fontWeight: '700', color: '#1a1a2e' },
@@ -253,4 +348,6 @@ const styles = StyleSheet.create({
   creneauBtnActive: { backgroundColor: '#5B52F0', borderColor: '#5B52F0' },
   creneauText: { fontSize: 13, fontWeight: '500', color: '#8888bb' },
   creneauTextActive: { color: '#fff' },
+  saveBtn: { backgroundColor: '#5B52F0', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 20 },
+  saveBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });

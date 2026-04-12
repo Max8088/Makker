@@ -29,6 +29,40 @@ export default function CreateScreen() {
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const geocodeLocation = async (address: string): Promise<{ latitude: number; longitude: number }> => {
+    try {
+      const query = encodeURIComponent(`${address}, Lyon, France`);
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
+        { headers: { 'User-Agent': 'MakkerApp/1.0' } }
+      );
+      const results = await response.json();
+      if (results && results.length > 0) {
+        return {
+          latitude: parseFloat(results[0].lat),
+          longitude: parseFloat(results[0].lon),
+        };
+      }
+    } catch (e) {
+      console.log('Géocodage échoué:', e);
+    }
+    return { latitude: 45.7490, longitude: 4.8350 };
+  };
+
+  const resetForm = () => {
+    setTitle('');
+    setDistance('');
+    setElevation('');
+    setPace('');
+    setDate('');
+    setTime('');
+    setLocation('');
+    setDescription('');
+    setSelectedSport('route');
+    setSelectedLevel('intermediaire');
+    setParticipants(8);
+  };
+
   const handlePublish = async () => {
     if (!title || !date || !time || !distance || !location) {
       Alert.alert('Champs manquants', 'Merci de remplir au minimum le titre, la date, l\'heure, la distance et le point de rendez-vous.');
@@ -38,12 +72,13 @@ export default function CreateScreen() {
     setLoading(true);
 
     const { data: { user } } = await supabase.auth.getUser();
-
     if (!user) {
       Alert.alert('Erreur', 'Tu dois être connecté pour publier une sortie.');
       setLoading(false);
       return;
     }
+
+    const { latitude, longitude } = await geocodeLocation(location);
 
     const { error } = await supabase.from('sorties').insert({
       titre: title,
@@ -59,8 +94,8 @@ export default function CreateScreen() {
       participants_max: participants,
       description,
       createur_id: user.id,
-      latitude: 45.7490,
-      longitude: 4.8350,
+      latitude,
+      longitude,
     });
 
     setLoading(false);
@@ -68,22 +103,8 @@ export default function CreateScreen() {
     if (error) {
       Alert.alert('Erreur', error.message);
     } else {
-      Alert.alert('Sortie publiée ! 🎉', 'Ta sortie est maintenant visible par les autres sportifs.', [
-        {
-          text: 'OK', onPress: () => {
-            setTitle('');
-            setDistance('');
-            setElevation('');
-            setPace('');
-            setDate('');
-            setTime('');
-            setLocation('');
-            setDescription('');
-            setSelectedSport('route');
-            setSelectedLevel('intermediaire');
-            setParticipants(8);
-          }
-        }
+      Alert.alert('Sortie publiée ! 🎉', 'Ta sortie apparaît maintenant sur la carte.', [
+        { text: 'OK', onPress: resetForm }
       ]);
     }
   };
@@ -181,7 +202,13 @@ export default function CreateScreen() {
 
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Point de rendez-vous</Text>
-          <TextInput style={styles.input} placeholder="ex: Parking Croix-Rousse" placeholderTextColor="#bbbbdd" value={location} onChangeText={setLocation} />
+          <TextInput
+            style={styles.input}
+            placeholder="ex: Parking Croix-Rousse, Lyon"
+            placeholderTextColor="#bbbbdd"
+            value={location}
+            onChangeText={setLocation}
+          />
         </View>
 
         <View style={styles.fieldGroup}>
@@ -203,7 +230,7 @@ export default function CreateScreen() {
           disabled={loading}
         >
           <Text style={styles.publishText}>
-            {loading ? 'Publication...' : 'Publier la sortie'}
+            {loading ? 'Géolocalisation & publication...' : 'Publier la sortie'}
           </Text>
         </TouchableOpacity>
 
