@@ -51,7 +51,7 @@ export default function MapScreen() {
   useEffect(() => {
     fetchSorties();
   }, []);
-  
+
   useFocusEffect(
     React.useCallback(() => {
       getUserLocation();
@@ -62,24 +62,17 @@ export default function MapScreen() {
   const getUserLocation = async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
-        'Permission refusée',
-        'Active la localisation pour voir les sorties près de toi.',
-      );
+      Alert.alert('Permission refusée', 'Active la localisation pour voir les sorties près de toi.');
       return;
     }
-
     const location = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.Balanced,
     });
-
     const coords = {
       latitude: location.coords.latitude,
       longitude: location.coords.longitude,
     };
-
     setUserLocation(coords);
-
     mapRef.current?.animateToRegion({
       ...coords,
       latitudeDelta: 0.15,
@@ -93,19 +86,16 @@ export default function MapScreen() {
       .select('*')
       .not('latitude', 'is', null)
       .not('longitude', 'is', null);
-
     if (!error) setSorties(data || []);
   };
 
   const handleRejoindre = async (sortieId: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
     const { error } = await supabase.from('participations').insert({
       sortie_id: sortieId,
       user_id: user.id,
     });
-
     if (error) {
       Alert.alert('Erreur', 'Tu as peut-être déjà rejoint cette sortie.');
     } else {
@@ -145,7 +135,6 @@ export default function MapScreen() {
         onPress={() => setSelectedRide(null)}
         showsUserLocation={false}
       >
-        {/* Point bleu position utilisateur */}
         {userLocation && (
           <>
             <Circle
@@ -155,7 +144,11 @@ export default function MapScreen() {
               strokeColor="rgba(91,82,240,0.3)"
               strokeWidth={1}
             />
-            <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }}>
+            <Marker
+              coordinate={userLocation}
+              anchor={{ x: 0.5, y: 0.5 }}
+              tracksViewChanges={false}
+            >
               <View style={styles.userDot}>
                 <View style={styles.userDotInner} />
               </View>
@@ -163,21 +156,26 @@ export default function MapScreen() {
           </>
         )}
 
-        {/* Marqueurs des sorties */}
-        {filtered.map(ride => (
-          <Marker
-            key={ride.id}
-            coordinate={{ latitude: ride.latitude, longitude: ride.longitude }}
-            onPress={() => setSelectedRide(ride)}
-          >
-            <View style={[styles.marker, { backgroundColor: SPORT_COLORS[ride.sport] }]}>
-              <Text style={styles.markerEmoji}>{SPORT_EMOJIS[ride.sport]}</Text>
-            </View>
-          </Marker>
-        ))}
+{filtered.map(ride => (
+  <Marker
+    key={ride.id}
+    coordinate={{ latitude: ride.latitude, longitude: ride.longitude }}
+    onPress={(e) => {
+      e.stopPropagation();
+      setSelectedRide(ride);
+    }}
+    tracksViewChanges={false}
+    tappable={true}
+  >
+    <View style={[styles.marker, { backgroundColor: SPORT_COLORS[ride.sport] }]}
+      pointerEvents="none"
+    >
+      <Text style={styles.markerEmoji}>{SPORT_EMOJIS[ride.sport]}</Text>
+    </View>
+  </Marker>
+))}
       </MapView>
 
-      {/* Filtres */}
       <View style={styles.filtersContainer}>
         <ScrollView
           horizontal
@@ -196,12 +194,10 @@ export default function MapScreen() {
         </ScrollView>
       </View>
 
-      {/* Bouton centrer sur ma position */}
       <TouchableOpacity style={styles.locateBtn} onPress={centerOnUser}>
         <Text style={styles.locateBtnText}>📍</Text>
       </TouchableOpacity>
 
-      {/* Carte sortie sélectionnée */}
       {selectedRide && (
         <View style={styles.rideCard}>
           <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedRide(null)}>
@@ -211,7 +207,7 @@ export default function MapScreen() {
             <View style={[styles.cardIcon, { backgroundColor: SPORT_COLORS[selectedRide.sport] + '20' }]}>
               <Text style={{ fontSize: 22 }}>{SPORT_EMOJIS[selectedRide.sport]}</Text>
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, paddingRight: 50 }}>
               <Text style={styles.cardTitle}>{selectedRide.titre}</Text>
               <Text style={styles.cardSport}>{selectedRide.sport.charAt(0).toUpperCase() + selectedRide.sport.slice(1)}</Text>
             </View>
@@ -295,11 +291,11 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   closeBtn: {
-    position: 'absolute', top: 10, right: 12,
-    width: 24, height: 24, borderRadius: 12,
+    position: 'absolute', top: 6, right: 6,
+    width: 54, height: 54, borderRadius: 32,
     backgroundColor: '#EEEDFE', alignItems: 'center', justifyContent: 'center',
   },
-  closeBtnText: { fontSize: 12, color: '#5B52F0' },
+  closeBtnText: { fontSize: 16, color: '#5B52F0', fontWeight: '600' },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   cardIcon: { width: 40, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   cardTitle: { fontSize: 15, fontWeight: '600', color: '#1a1a2e' },

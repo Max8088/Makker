@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
+import SettingsScreen from './SettingsScreen';
 
 const SPORTS = [
   { id: 'route', label: 'Route', emoji: '🚴' },
@@ -52,6 +53,7 @@ export default function ProfileScreen() {
   const [sportsSecondaires, setSportsSecondaires] = useState<string[]>([]);
   const [creneaux, setCreneaux] = useState<string[]>(['matin', 'weekend']);
   const [loading, setLoading] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -129,12 +131,19 @@ export default function ProfileScreen() {
     ? `${profile.prenom || ''} ${profile.nom || ''}`.trim()
     : 'Chargement...';
 
+  if (showSettings) return (
+    <SettingsScreen
+      onBack={() => { setShowSettings(false); fetchProfile(); }}
+      onLogout={handleLogout}
+    />
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
         <Text style={styles.pageTitle}>Profil</Text>
-        <TouchableOpacity style={styles.settingsBtn} onPress={handleLogout}>
-          <Text style={{ fontSize: 16 }}>🚪</Text>
+        <TouchableOpacity style={styles.settingsBtn} onPress={() => setShowSettings(true)}>
+          <Text style={{ fontSize: 16 }}>⚙️</Text>
         </TouchableOpacity>
       </View>
 

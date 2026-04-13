@@ -46,30 +46,31 @@ export default function MessagesScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data: participations } = await supabase
-      .from('participations')
-      .select('sortie_id')
-      .eq('user_id', user.id);
-
     const { data: creees } = await supabase
       .from('sorties')
       .select('id, titre, sport')
       .eq('createur_id', user.id);
 
-    if (!participations || participations.length === 0) {
-      setSorties(creees || []);
-      return;
+    const { data: participations } = await supabase
+      .from('participations')
+      .select('sortie_id')
+      .eq('user_id', user.id);
+
+    const sortieIds = (participations || []).map(p => p.sortie_id);
+    const filteredIds = sortieIds.filter(id =>
+      !(creees || []).find(s => s.id === id)
+    );
+
+    let rejointes: Sortie[] = [];
+    if (filteredIds.length > 0) {
+      const { data } = await supabase
+        .from('sorties')
+        .select('id, titre, sport')
+        .in('id', filteredIds);
+      rejointes = data || [];
     }
 
-    const sortieIds = participations.map(p => p.sortie_id);
-    const { data: rejointes } = await supabase
-      .from('sorties')
-      .select('id, titre, sport')
-      .in('id', sortieIds);
-
-    const toutes = [...(creees || []), ...(rejointes || [])];
-    const uniques = toutes.filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i);
-    setSorties(uniques);
+    setSorties([...(creees || []), ...rejointes]);
   };
 
   const fetchMessages = async (sortieId: string) => {
@@ -84,13 +85,23 @@ export default function MessagesScreen() {
     }
   };
 
+  const closeChat = () => {
+    setOpenChat(null);
+    setMessages([]);
+    supabase.getChannels().forEach(c => supabase.removeChannel(c));
+  };
+
   const openChatWith = (sortie: Sortie) => {
     setOpenChat(sortie);
     setMessages([]);
     fetchMessages(sortie.id);
 
-    const subscription = supabase
-      .channel(`room-${sortie.id}`)
+    const channelName = `room-${sortie.id}`;
+    const existing = supabase.getChannels().find(c => c.topic === `realtime:${channelName}`);
+    if (existing) supabase.removeChannel(existing);
+
+    supabase
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -105,8 +116,6 @@ export default function MessagesScreen() {
         }
       )
       .subscribe();
-
-    return () => supabase.removeChannel(subscription);
   };
 
   const sendMessage = async () => {
@@ -118,7 +127,6 @@ export default function MessagesScreen() {
       user_id: userId,
       contenu,
     });
-    await fetchMessages(openChat.id);
   };
 
   if (openChat) {
@@ -126,10 +134,10 @@ export default function MessagesScreen() {
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={100}
+        keyboardVerticalOffset={10}
       >
         <View style={styles.chatHeader}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => { setOpenChat(null); setMessages([]); }}>
+          <TouchableOpacity style={styles.backBtn} onPress={closeChat}>
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
           <View style={[styles.convIcon, { backgroundColor: SPORT_COLORS[openChat.sport] + '20' }]}>
