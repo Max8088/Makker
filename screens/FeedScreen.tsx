@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
 import FiltersSheet, { Filters, defaultFilters } from './FiltersSheet';
+import RideDetailScreen from './RideDetailScreen';
 
 const SPORTS = [
   { id: 'all', label: 'Tous' },
@@ -31,14 +32,16 @@ type Sortie = {
   elevation: string;
   allure: string;
   lieu: string;
+  lieu_rencontre: string;
   date_sortie: string;
   heure: string;
   participants_max: number;
   niveau: string;
+  description: string;
+  createur_id: string;
   created_at: string;
 };
 
-// Fonction utilitaire pour parser DD/MM/YYYY ou YYYY-MM-DD
 const parseDate = (dateStr: string): Date => {
   if (!dateStr) return new Date();
   const slashParts = dateStr.split('/');
@@ -60,54 +63,35 @@ export default function FeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
+  const [selectedRide, setSelectedRide] = useState<Sortie | null>(null);
 
   const fetchSorties = async () => {
     const { data, error } = await supabase
       .from('sorties')
       .select('*')
       .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error(error);
-    } else {
-      setSorties(data || []);
-    }
+    if (error) { console.error(error); }
+    else { setSorties(data || []); }
     setLoading(false);
     setRefreshing(false);
   };
 
-  useEffect(() => {
-    fetchSorties();
-  }, []);
+  useEffect(() => { fetchSorties(); }, []);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchSorties();
-  };
+  const onRefresh = () => { setRefreshing(true); fetchSorties(); };
 
   const handleRejoindre = async (sortieId: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    const { error } = await supabase.from('participations').insert({
-      sortie_id: sortieId,
-      user_id: user.id,
-    });
-
-    if (error) {
-      Alert.alert('Erreur', 'Tu as peut-être déjà rejoint cette sortie.');
-    } else {
-      Alert.alert('Super ! 🎉', 'Tu as rejoint la sortie !');
-    }
+    const { error } = await supabase.from('participations').insert({ sortie_id: sortieId, user_id: user.id });
+    if (error) { Alert.alert('Erreur', 'Tu as peut-être déjà rejoint cette sortie.'); }
+    else { Alert.alert('Super ! 🎉', 'Tu as rejoint la sortie !'); }
   };
 
   const activeFiltersCount = [
-    filters.sport !== 'all',
-    filters.niveau !== 'all',
-    filters.date !== 'all',
-    filters.creneau !== 'all',
-    filters.distanceMax < 200,
-    filters.deniveleMax < 3000,
+    filters.sport !== 'all', filters.niveau !== 'all',
+    filters.date !== 'all', filters.creneau !== 'all',
+    filters.distanceMax < 200, filters.deniveleMax < 3000,
     filters.placesDisponibles,
   ].filter(Boolean).length;
 
@@ -123,7 +107,6 @@ export default function FeedScreen() {
       const dateRideCreneau = parseDate(ride.date_sortie);
       const jour = dateRideCreneau.getDay();
       const estWeekend = jour === 0 || jour === 6;
-
       if (filters.creneau === 'matin' && (heure < 6 || heure >= 12)) return false;
       if (filters.creneau === 'aprem' && (heure < 12 || heure >= 18)) return false;
       if (filters.creneau === 'soir' && (heure < 18 || heure >= 23)) return false;
@@ -131,37 +114,32 @@ export default function FeedScreen() {
     }
 
     if (filters.date !== 'all') {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const dateRide = parseDate(ride.date_sortie);
-      dateRide.setHours(0, 0, 0, 0);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const dateRide = parseDate(ride.date_sortie); dateRide.setHours(0, 0, 0, 0);
       const jour = dateRide.getDay();
-
-      if (filters.date === 'today') {
-        if (!isSameDay(dateRide, today)) return false;
-      }
-
+      if (filters.date === 'today' && !isSameDay(dateRide, today)) return false;
       if (filters.date === 'week') {
-        const endOfWeek = new Date(today);
-        endOfWeek.setDate(today.getDate() + 7);
-        endOfWeek.setHours(23, 59, 59, 999);
+        const endOfWeek = new Date(today); endOfWeek.setDate(today.getDate() + 7); endOfWeek.setHours(23, 59, 59, 999);
         if (dateRide < today || dateRide > endOfWeek) return false;
       }
-
       if (filters.date === 'weekend') {
-        const daysUntilWeekend = new Date(today);
-        daysUntilWeekend.setDate(today.getDate() + 14);
+        const daysUntilWeekend = new Date(today); daysUntilWeekend.setDate(today.getDate() + 14);
         if (jour !== 0 && jour !== 6) return false;
         if (dateRide < today || dateRide > daysUntilWeekend) return false;
       }
     }
-
     return true;
   });
 
+  if (selectedRide) return (
+    <RideDetailScreen
+      sortie={selectedRide}
+      onBack={() => setSelectedRide(null)}
+    />
+  );
+
   return (
     <View style={styles.container}>
-
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Makker</Text>
@@ -178,8 +156,7 @@ export default function FeedScreen() {
       </View>
 
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
+        horizontal showsHorizontalScrollIndicator={false}
         style={styles.filtersRow}
         contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }}
       >
@@ -221,25 +198,21 @@ export default function FeedScreen() {
                 </View>
               </View>
               <View style={styles.statsRow}>
-                <View style={styles.stat}>
-                  <Text style={styles.statLabel}>Distance</Text>
-                  <Text style={styles.statVal}>{ride.distance} km</Text>
-                </View>
-                <View style={styles.stat}>
-                  <Text style={styles.statLabel}>Dénivelé</Text>
-                  <Text style={styles.statVal}>{ride.elevation} m</Text>
-                </View>
-                <View style={styles.stat}>
-                  <Text style={styles.statLabel}>Allure</Text>
-                  <Text style={styles.statVal}>{ride.allure}</Text>
-                </View>
+                <View style={styles.stat}><Text style={styles.statLabel}>Distance</Text><Text style={styles.statVal}>{ride.distance} km</Text></View>
+                <View style={styles.stat}><Text style={styles.statLabel}>Dénivelé</Text><Text style={styles.statVal}>{ride.elevation} m</Text></View>
+                <View style={styles.stat}><Text style={styles.statLabel}>Allure</Text><Text style={styles.statVal}>{ride.allure}</Text></View>
               </View>
               <Text style={styles.meta}>📍 {ride.lieu}  ·  📅 {ride.date_sortie} à {ride.heure}</Text>
               <View style={styles.cardFooter}>
                 <Text style={styles.going}>Max {ride.participants_max} participants</Text>
-                <TouchableOpacity style={styles.joinBtn} onPress={() => handleRejoindre(ride.id)}>
-                  <Text style={styles.joinText}>Rejoindre</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity style={styles.detailBtn} onPress={() => setSelectedRide(ride)}>
+                    <Text style={styles.detailText}>Détails</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.joinBtn} onPress={() => handleRejoindre(ride.id)}>
+                    <Text style={styles.joinText}>Rejoindre</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           ))}
@@ -252,7 +225,6 @@ export default function FeedScreen() {
         onApply={setFilters}
         onClose={() => setShowFilters(false)}
       />
-
     </View>
   );
 }
@@ -287,6 +259,8 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12, color: '#8888bb', marginBottom: 12 },
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   going: { fontSize: 12, color: '#8888bb' },
+  detailBtn: { backgroundColor: '#EEEDFE', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 14 },
+  detailText: { color: '#5B52F0', fontWeight: '600', fontSize: 13 },
   joinBtn: { backgroundColor: '#5B52F0', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 18 },
   joinText: { color: '#fff', fontWeight: '600', fontSize: 13 },
 });
