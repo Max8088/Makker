@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  TextInput, StyleSheet, Alert
+  TextInput, StyleSheet, Alert, Image
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../lib/supabase';
 
 const SPORTS = [
@@ -19,11 +20,11 @@ const NIVEAUX = [
 ];
 
 const CRENEAUX = [
-    { id: 'matin', label: '🌅 Matin (6h-12h)' },
-    { id: 'aprem', label: '☀️ Après-midi (12h-18h)' },
-    { id: 'soir', label: '🌆 Soir (18h-23h)' },
-    { id: 'weekend', label: '📅 Weekend' },
-  ];
+  { id: 'matin', label: '🌅 Matin (6h-12h)' },
+  { id: 'aprem', label: '☀️ Après-midi (12h-18h)' },
+  { id: 'soir', label: '🌆 Soir (18h-23h)' },
+  { id: 'weekend', label: '📅 Weekend' },
+];
 
 export default function SettingsScreen({ onBack, onLogout }: { onBack: () => void; onLogout: () => void }) {
   const [prenom, setPrenom] = useState('');
@@ -33,6 +34,8 @@ export default function SettingsScreen({ onBack, onLogout }: { onBack: () => voi
   const [niveau, setNiveau] = useState('intermediaire');
   const [creneaux, setCreneaux] = useState<string[]>(['matin']);
   const [loading, setLoading] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -53,6 +56,63 @@ export default function SettingsScreen({ onBack, onLogout }: { onBack: () => voi
       setSportPrincipal(data.sport_principal || 'route');
       setNiveau(data.niveau || 'intermediaire');
       setCreneaux(data.creneaux || ['matin']);
+      setAvatarUrl(data.avatar_url || null);
+    }
+  };
+
+  const handlePickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission refusée', 'Active l\'accès aux photos dans les réglages.');
+      return;
+    }
+  
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+    });
+  
+    if (result.canceled) return;
+  
+    setUploadingAvatar(true);
+  
+    try {
+      const uri = result.assets[0].uri;
+      const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+  
+      const fileName = `${user.id}-${Date.now()}.${ext}`;
+      const formData = new FormData();
+      formData.append('file', {
+        uri,
+        name: fileName,
+        type: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+      } as any);
+  
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, formData, {
+          contentType: 'multipart/form-data',
+          upsert: true,
+        });
+  
+      if (uploadError) throw uploadError;
+  
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+  
+      await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user.id);
+      setAvatarUrl(publicUrl);
+      Alert.alert('Photo mise à jour ! ✅', '');
+    } catch (e) {
+      console.log('Erreur upload:', e);
+      Alert.alert('Erreur', 'Impossible de télécharger la photo.');
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -69,14 +129,7 @@ export default function SettingsScreen({ onBack, onLogout }: { onBack: () => voi
 
     const { error } = await supabase
       .from('profiles')
-      .update({
-        prenom,
-        nom,
-        ville,
-        sport_principal: sportPrincipal,
-        niveau,
-        creneaux,
-      })
+      .update({ prenom, nom, ville, sport_principal: sportPrincipal, niveau, creneaux })
       .eq('id', user.id);
 
     setLoading(false);
@@ -113,40 +166,42 @@ export default function SettingsScreen({ onBack, onLogout }: { onBack: () => voi
 
       <ScrollView contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: 40 }}>
 
+        {/* Avatar */}
+        <View style={styles.avatarSection}>
+          <TouchableOpacity onPress={handlePickAvatar} disabled={uploadingAvatar}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarInitials}>
+                  {prenom?.[0]}{nom?.[0]}
+                </Text>
+              </View>
+            )}
+            <View style={styles.avatarEdit}>
+              <Text style={{ fontSize: 12 }}>📷</Text>
+            </View>
+          </TouchableOpacity>
+          {uploadingAvatar && <Text style={styles.uploadingText}>Upload en cours...</Text>}
+          <Text style={styles.avatarHint}>Appuie pour changer la photo</Text>
+        </View>
+
         {/* Infos personnelles */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Informations personnelles</Text>
           <View style={styles.row}>
             <View style={[styles.fieldGroup, { flex: 1 }]}>
               <Text style={styles.label}>Prénom</Text>
-              <TextInput
-                style={styles.input}
-                value={prenom}
-                onChangeText={setPrenom}
-                placeholder="ex: Maxime"
-                placeholderTextColor="#bbbbdd"
-              />
+              <TextInput style={styles.input} value={prenom} onChangeText={setPrenom} placeholder="ex: Maxime" placeholderTextColor="#bbbbdd" />
             </View>
             <View style={[styles.fieldGroup, { flex: 1 }]}>
               <Text style={styles.label}>Nom</Text>
-              <TextInput
-                style={styles.input}
-                value={nom}
-                onChangeText={setNom}
-                placeholder="ex: Dupont"
-                placeholderTextColor="#bbbbdd"
-              />
+              <TextInput style={styles.input} value={nom} onChangeText={setNom} placeholder="ex: Dupont" placeholderTextColor="#bbbbdd" />
             </View>
           </View>
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Ville</Text>
-            <TextInput
-              style={styles.input}
-              value={ville}
-              onChangeText={setVille}
-              placeholder="ex: Lyon"
-              placeholderTextColor="#bbbbdd"
-            />
+            <TextInput style={styles.input} value={ville} onChangeText={setVille} placeholder="ex: Lyon" placeholderTextColor="#bbbbdd" />
           </View>
         </View>
 
@@ -199,16 +254,10 @@ export default function SettingsScreen({ onBack, onLogout }: { onBack: () => voi
           </View>
         </View>
 
-        {/* Bouton sauvegarder */}
-        <TouchableOpacity
-          style={[styles.saveBtn, loading && { opacity: 0.7 }]}
-          onPress={handleSave}
-          disabled={loading}
-        >
+        <TouchableOpacity style={[styles.saveBtn, loading && { opacity: 0.7 }]} onPress={handleSave} disabled={loading}>
           <Text style={styles.saveBtnText}>{loading ? 'Enregistrement...' : 'Enregistrer les modifications'}</Text>
         </TouchableOpacity>
 
-        {/* Déconnexion */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Text style={styles.logoutText}>Se déconnecter</Text>
         </TouchableOpacity>
@@ -224,6 +273,13 @@ const styles = StyleSheet.create({
   backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#EEEDFE', alignItems: 'center', justifyContent: 'center' },
   backArrow: { fontSize: 18, color: '#5B52F0' },
   title: { fontSize: 18, fontWeight: '700', color: '#1a1a2e' },
+  avatarSection: { alignItems: 'center', marginBottom: 4 },
+  avatarImg: { width: 80, height: 80, borderRadius: 24, backgroundColor: '#EEEDFE' },
+  avatarPlaceholder: { width: 80, height: 80, borderRadius: 24, backgroundColor: '#5B52F0', alignItems: 'center', justifyContent: 'center' },
+  avatarInitials: { fontSize: 28, fontWeight: '700', color: '#fff' },
+  avatarEdit: { position: 'absolute', bottom: -4, right: -4, width: 26, height: 26, borderRadius: 13, backgroundColor: '#5B52F0', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
+  uploadingText: { fontSize: 12, color: '#8888bb', marginTop: 8 },
+  avatarHint: { fontSize: 12, color: '#8888bb', marginTop: 10 },
   section: { backgroundColor: '#fff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#DDD8FF', gap: 12 },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: '#1a1a2e' },
   row: { flexDirection: 'row', gap: 10 },
