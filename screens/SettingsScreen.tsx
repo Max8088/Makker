@@ -19,11 +19,11 @@ const NIVEAUX = [
 ];
 
 const CRENEAUX = [
-  { id: 'matin', label: '🌅 Matin' },
-  { id: 'midi', label: '☀️ Midi' },
-  { id: 'soir', label: '🌆 Soir' },
-  { id: 'weekend', label: '📅 Weekend' },
-];
+    { id: 'matin', label: '🌅 Matin (6h-12h)' },
+    { id: 'aprem', label: '☀️ Après-midi (12h-18h)' },
+    { id: 'soir', label: '🌆 Soir (18h-23h)' },
+    { id: 'weekend', label: '📅 Weekend' },
+  ];
 
 export default function SettingsScreen({ onBack, onLogout }: { onBack: () => void; onLogout: () => void }) {
   const [prenom, setPrenom] = useState('');

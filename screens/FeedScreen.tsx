@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
+import FiltersSheet, { Filters, defaultFilters } from './FiltersSheet';
 
 const SPORTS = [
   { id: 'all', label: 'Tous' },
@@ -37,11 +38,28 @@ type Sortie = {
   created_at: string;
 };
 
+// Fonction utilitaire pour parser DD/MM/YYYY ou YYYY-MM-DD
+const parseDate = (dateStr: string): Date => {
+  if (!dateStr) return new Date();
+  const slashParts = dateStr.split('/');
+  if (slashParts.length === 3) {
+    return new Date(`${slashParts[2]}-${slashParts[1].padStart(2,'0')}-${slashParts[0].padStart(2,'0')}`);
+  }
+  return new Date(dateStr);
+};
+
+const isSameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
 export default function FeedScreen() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [sorties, setSorties] = useState<Sortie[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<Filters>(defaultFilters);
 
   const fetchSorties = async () => {
     const { data, error } = await supabase
@@ -83,13 +101,80 @@ export default function FeedScreen() {
     }
   };
 
-  const filtered = activeFilter === 'all' ? sorties : sorties.filter(s => s.sport === activeFilter);
+  const activeFiltersCount = [
+    filters.sport !== 'all',
+    filters.niveau !== 'all',
+    filters.date !== 'all',
+    filters.creneau !== 'all',
+    filters.distanceMax < 200,
+    filters.deniveleMax < 3000,
+    filters.placesDisponibles,
+  ].filter(Boolean).length;
+
+  const filtered = sorties.filter(ride => {
+    if (activeFilter !== 'all' && ride.sport !== activeFilter) return false;
+    if (filters.sport !== 'all' && ride.sport !== filters.sport) return false;
+    if (filters.niveau !== 'all' && ride.niveau !== filters.niveau) return false;
+    if (filters.distanceMax < 200 && parseFloat(ride.distance) > filters.distanceMax) return false;
+    if (filters.deniveleMax < 3000 && parseFloat(ride.elevation) > filters.deniveleMax) return false;
+
+    if (filters.creneau !== 'all') {
+      const heure = parseInt(ride.heure?.split(':')[0] || '0');
+      const dateRideCreneau = parseDate(ride.date_sortie);
+      const jour = dateRideCreneau.getDay();
+      const estWeekend = jour === 0 || jour === 6;
+
+      if (filters.creneau === 'matin' && (heure < 6 || heure >= 12)) return false;
+      if (filters.creneau === 'aprem' && (heure < 12 || heure >= 18)) return false;
+      if (filters.creneau === 'soir' && (heure < 18 || heure >= 23)) return false;
+      if (filters.creneau === 'weekend' && !estWeekend) return false;
+    }
+
+    if (filters.date !== 'all') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dateRide = parseDate(ride.date_sortie);
+      dateRide.setHours(0, 0, 0, 0);
+      const jour = dateRide.getDay();
+
+      if (filters.date === 'today') {
+        if (!isSameDay(dateRide, today)) return false;
+      }
+
+      if (filters.date === 'week') {
+        const endOfWeek = new Date(today);
+        endOfWeek.setDate(today.getDate() + 7);
+        endOfWeek.setHours(23, 59, 59, 999);
+        if (dateRide < today || dateRide > endOfWeek) return false;
+      }
+
+      if (filters.date === 'weekend') {
+        const daysUntilWeekend = new Date(today);
+        daysUntilWeekend.setDate(today.getDate() + 14);
+        if (jour !== 0 && jour !== 6) return false;
+        if (dateRide < today || dateRide > daysUntilWeekend) return false;
+      }
+    }
+
+    return true;
+  });
 
   return (
     <View style={styles.container}>
+
       <View style={styles.header}>
-        <Text style={styles.title}>Makker</Text>
-        <Text style={styles.subtitle}>Trouve ta prochaine aventure</Text>
+        <View>
+          <Text style={styles.title}>Makker</Text>
+          <Text style={styles.subtitle}>Trouve ta prochaine aventure</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.filterBtn, activeFiltersCount > 0 && styles.filterBtnActive]}
+          onPress={() => setShowFilters(true)}
+        >
+          <Text style={[styles.filterBtnText, activeFiltersCount > 0 && styles.filterBtnTextActive]}>
+            ⚡ Filtres{activeFiltersCount > 0 ? ` (${activeFiltersCount})` : ''}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -115,8 +200,8 @@ export default function FeedScreen() {
         </View>
       ) : filtered.length === 0 ? (
         <View style={styles.loadingWrap}>
-          <Text style={styles.loadingText}>Aucune sortie pour l'instant.</Text>
-          <Text style={styles.loadingSub}>Sois le premier à en créer une ! 🚴</Text>
+          <Text style={styles.loadingText}>Aucune sortie trouvée.</Text>
+          <Text style={styles.loadingSub}>Essaie d'ajuster tes filtres 🎯</Text>
         </View>
       ) : (
         <ScrollView
@@ -160,15 +245,27 @@ export default function FeedScreen() {
           ))}
         </ScrollView>
       )}
+
+      <FiltersSheet
+        visible={showFilters}
+        filters={filters}
+        onApply={setFilters}
+        onClose={() => setShowFilters(false)}
+      />
+
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F3FF', paddingTop: 56 },
-  header: { paddingHorizontal: 20, marginBottom: 12 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
   title: { fontSize: 26, fontWeight: '800', color: '#1a1a2e', letterSpacing: 1 },
   subtitle: { fontSize: 13, color: '#8888bb', marginTop: 2 },
+  filterBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff' },
+  filterBtnActive: { backgroundColor: '#5B52F0', borderColor: '#5B52F0' },
+  filterBtnText: { fontSize: 12, fontWeight: '600', color: '#8888bb' },
+  filterBtnTextActive: { color: '#fff' },
   filtersRow: { maxHeight: 44, marginBottom: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff' },
   chipActive: { backgroundColor: '#5B52F0', borderColor: '#5B52F0' },
