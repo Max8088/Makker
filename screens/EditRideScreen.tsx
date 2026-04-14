@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   TextInput, StyleSheet, Alert
@@ -34,6 +34,22 @@ type Sortie = {
   niveau: string;
   description: string;
   createur_id: string;
+  latitude?: number;
+  longitude?: number;
+};
+
+type Suggestion = {
+  display_name: string;
+  lat: string;
+  lon: string;
+  address: {
+    city?: string;
+    town?: string;
+    village?: string;
+    municipality?: string;
+    county?: string;
+    state?: string;
+  };
 };
 
 type Props = {
@@ -49,6 +65,9 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
   const [elevation, setElevation] = useState(sortie.elevation);
   const [allure, setAllure] = useState(sortie.allure);
   const [lieu, setLieu] = useState(sortie.lieu);
+  const [locationCoords, setLocationCoords] = useState<{ latitude: number; longitude: number } | null>(
+    sortie.latitude ? { latitude: sortie.latitude, longitude: sortie.longitude! } : null
+  );
   const [lieuRencontre, setLieuRencontre] = useState(sortie.lieu_rencontre || '');
   const [date, setDate] = useState(sortie.date_sortie);
   const [heure, setHeure] = useState(sortie.heure);
@@ -56,6 +75,53 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
   const [niveau, setNiveau] = useState(sortie.niveau);
   const [description, setDescription] = useState(sortie.description || '');
   const [loading, setLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const searchLocation = async (text: string) => {
+    setLieu(text);
+    setLocationCoords(null);
+
+    if (text.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+
+    searchTimeout.current = setTimeout(async () => {
+      try {
+        const query = encodeURIComponent(text);
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=5&addressdetails=1&countrycodes=fr`,
+          { headers: { 'User-Agent': 'MakkerApp/1.0' } }
+        );
+        const results: Suggestion[] = await response.json();
+        setSuggestions(results);
+        setShowSuggestions(true);
+      } catch (e) {
+        console.log('Erreur recherche:', e);
+      }
+    }, 400);
+  };
+
+  const selectSuggestion = (suggestion: Suggestion) => {
+    const addr = suggestion.address;
+    const ville = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
+    const label = ville
+      ? `${ville}${addr.state ? ', ' + addr.state : ''}`
+      : suggestion.display_name.split(',').slice(0, 2).join(',').trim();
+
+    setLieu(label);
+    setLocationCoords({
+      latitude: parseFloat(suggestion.lat),
+      longitude: parseFloat(suggestion.lon),
+    });
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
 
   const handleSave = async () => {
     if (!titre || !lieu || !date || !heure) {
@@ -66,11 +132,15 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
     const { error } = await supabase
       .from('sorties')
       .update({
-        titre, sport, distance, elevation, allure, lieu,
-        lieu_rencontre: lieuRencontre,
+        titre, sport, distance, elevation, allure,
+        lieu, lieu_rencontre: lieuRencontre,
         date_sortie: date, heure,
         participants_max: parseInt(participantsMax) || 5,
         niveau, description,
+        ...(locationCoords && {
+          latitude: locationCoords.latitude,
+          longitude: locationCoords.longitude,
+        }),
       })
       .eq('id', sortie.id);
     setLoading(false);
@@ -92,7 +162,10 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
           <View style={{ width: 36 }} />
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}>
+        <ScrollView
+          contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}
+          keyboardShouldPersistTaps="handled"
+        >
 
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Titre de la sortie *</Text>
@@ -144,9 +217,41 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
             </View>
           </View>
 
+          {/* Lieu avec suggestions */}
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Lieu *</Text>
-            <TextInput style={styles.input} value={lieu} onChangeText={setLieu} placeholder="ex: Lyon 4e" placeholderTextColor="#bbbbdd" />
+            <Text style={styles.label}>
+              Lieu *{' '}
+              {locationCoords && <Text style={styles.confirmed}>✓ Confirmé</Text>}
+            </Text>
+            <TextInput
+              style={[styles.input, locationCoords && styles.inputConfirmed]}
+              value={lieu}
+              onChangeText={searchLocation}
+              placeholder="ex: Lyon, Col de l'Oeillon..."
+              placeholderTextColor="#bbbbdd"
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            />
+            {showSuggestions && suggestions.length > 0 && (
+              <View style={styles.suggestionsBox}>
+                {suggestions.map((s, i) => {
+                  const addr = s.address;
+                  const ville = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
+                  const label = ville
+                    ? `${ville}${addr.state ? ', ' + addr.state : ''}`
+                    : s.display_name.split(',').slice(0, 2).join(',').trim();
+                  return (
+                    <TouchableOpacity
+                      key={i}
+                      style={[styles.suggestionItem, i < suggestions.length - 1 && styles.suggestionBorder]}
+                      onPress={() => selectSuggestion(s)}
+                    >
+                      <Text style={styles.suggestionIcon}>📍</Text>
+                      <Text style={styles.suggestionText}>{label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
           </View>
 
           <View style={styles.fieldGroup}>
@@ -200,7 +305,9 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a2e' },
   fieldGroup: { gap: 6 },
   label: { fontSize: 12, fontWeight: '600', color: '#8888bb' },
+  confirmed: { fontSize: 12, fontWeight: '600', color: '#22c55e' },
   input: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', padding: 11, fontSize: 13, color: '#1a1a2e' },
+  inputConfirmed: { borderColor: '#22c55e', backgroundColor: '#f0fdf4' },
   textArea: { height: 100, textAlignVertical: 'top' },
   row: { flexDirection: 'row', gap: 10 },
   sportGrid: { flexDirection: 'row', gap: 8 },
@@ -212,6 +319,17 @@ const styles = StyleSheet.create({
   niveauxRow: { flexDirection: 'row', gap: 8 },
   niveauBtn: { flex: 1, padding: 9, borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff', alignItems: 'center' },
   niveauText: { fontSize: 11, fontWeight: '600', color: '#8888bb' },
+  suggestionsBox: {
+    backgroundColor: '#fff', borderRadius: 10,
+    borderWidth: 1.5, borderColor: '#DDD8FF',
+    marginTop: 4, overflow: 'hidden',
+    shadowColor: '#5B52F0', shadowOpacity: 0.08,
+    shadowRadius: 8, elevation: 4,
+  },
+  suggestionItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
+  suggestionBorder: { borderBottomWidth: 1, borderBottomColor: '#F4F3FF' },
+  suggestionIcon: { fontSize: 14 },
+  suggestionText: { fontSize: 13, color: '#1a1a2e', flex: 1 },
   saveBtn: { backgroundColor: '#5B52F0', borderRadius: 12, padding: 15, alignItems: 'center', marginTop: 8 },
   saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
