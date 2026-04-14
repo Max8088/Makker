@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import PublicProfileScreen from './PublicProfileScreen';
+import EditRideScreen from './EditRideScreen';
+import SwipeBack from '../components/SwipeBack';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Alert
+  StyleSheet, Alert, Image
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 
@@ -45,6 +47,7 @@ type Profile = {
   ville: string;
   niveau: string;
   sport_principal: string;
+  avatar_url?: string;
 };
 
 type Props = {
@@ -59,6 +62,7 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [showPublicProfile, setShowPublicProfile] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   useEffect(() => {
     fetchCreateur();
@@ -69,7 +73,7 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
   const fetchCreateur = async () => {
     const { data } = await supabase
       .from('profiles')
-      .select('prenom, nom, ville, niveau, sport_principal')
+      .select('prenom, nom, ville, niveau, sport_principal, avatar_url')
       .eq('id', sortie.createur_id)
       .single();
     if (data) setCreateur(data);
@@ -113,8 +117,34 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
     }
   };
 
+  const handleDelete = () => {
+    Alert.alert(
+      'Supprimer la sortie',
+      'Cette action est irréversible. Tu es sûr ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer', style: 'destructive',
+          onPress: async () => {
+            await supabase.from('sorties').delete().eq('id', sortie.id);
+            Alert.alert('Sortie supprimée ✅', '');
+            onBack();
+          }
+        }
+      ]
+    );
+  };
+
   const isCreateur = currentUserId === sortie.createur_id;
   const niveauColor = NIVEAU_COLORS[sortie.niveau] || '#8888bb';
+
+  if (showEdit) return (
+    <EditRideScreen
+      sortie={sortie}
+      onBack={() => setShowEdit(false)}
+      onSaved={() => { setShowEdit(false); onBack(); }}
+    />
+  );
 
   if (showPublicProfile) return (
     <PublicProfileScreen
@@ -124,147 +154,158 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-          <Text style={styles.backArrow}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Détail de la sortie</Text>
-        <View style={{ width: 36 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-
-        <View style={styles.mainCard}>
-          <View style={styles.sportRow}>
-            <View style={[styles.sportIcon, { backgroundColor: SPORT_COLORS[sortie.sport] + '20' }]}>
-              <Text style={{ fontSize: 28 }}>{SPORT_EMOJIS[sortie.sport]}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.titre}>{sortie.titre}</Text>
-              <Text style={styles.sportLabel}>{SPORT_LABELS[sortie.sport]}</Text>
-            </View>
-            <View style={[styles.niveauBadge, { backgroundColor: niveauColor + '20', borderColor: niveauColor }]}>
-              <Text style={[styles.niveauText, { color: niveauColor }]}>{sortie.niveau}</Text>
-            </View>
-          </View>
-
-          <View style={styles.statsGrid}>
-            <View style={styles.statItem}>
-              <Text style={styles.statVal}>{sortie.distance} km</Text>
-              <Text style={styles.statLabel}>Distance</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statVal}>{sortie.elevation} m</Text>
-              <Text style={styles.statLabel}>Dénivelé</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statVal}>{sortie.allure}</Text>
-              <Text style={styles.statLabel}>Allure</Text>
-            </View>
-          </View>
+    <SwipeBack onSwipeBack={onBack}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+            <Text style={styles.backArrow}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Détail de la sortie</Text>
+          <View style={{ width: 36 }} />
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Informations</Text>
-          <View style={styles.infoCard}>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoIcon}>📅</Text>
-              <View>
-                <Text style={styles.infoLabel}>Date & Heure</Text>
-                <Text style={styles.infoVal}>{sortie.date_sortie} à {sortie.heure}</Text>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+
+          <View style={styles.mainCard}>
+            <View style={styles.sportRow}>
+              <View style={[styles.sportIcon, { backgroundColor: SPORT_COLORS[sortie.sport] + '20' }]}>
+                <Text style={{ fontSize: 28 }}>{SPORT_EMOJIS[sortie.sport]}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.titre}>{sortie.titre}</Text>
+                <Text style={styles.sportLabel}>{SPORT_LABELS[sortie.sport]}</Text>
+              </View>
+              <View style={[styles.niveauBadge, { backgroundColor: niveauColor + '20', borderColor: niveauColor }]}>
+                <Text style={[styles.niveauText, { color: niveauColor }]}>{sortie.niveau}</Text>
               </View>
             </View>
-            <View style={styles.infoDivider} />
-            <View style={styles.infoRow}>
-              <Text style={styles.infoIcon}>📍</Text>
-              <View>
-                <Text style={styles.infoLabel}>Point de départ</Text>
-                <Text style={styles.infoVal}>{sortie.lieu_rencontre || sortie.lieu}</Text>
+
+            <View style={styles.statsGrid}>
+              <View style={styles.statItem}>
+                <Text style={styles.statVal}>{sortie.distance} km</Text>
+                <Text style={styles.statLabel}>Distance</Text>
               </View>
-            </View>
-            <View style={styles.infoDivider} />
-            <View style={styles.infoRow}>
-              <Text style={styles.infoIcon}>👥</Text>
-              <View>
-                <Text style={styles.infoLabel}>Participants</Text>
-                <Text style={styles.infoVal}>{participants}/{sortie.participants_max} inscrits</Text>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statVal}>{sortie.elevation} m</Text>
+                <Text style={styles.statLabel}>Dénivelé</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statVal}>{sortie.allure}</Text>
+                <Text style={styles.statLabel}>Allure</Text>
               </View>
             </View>
           </View>
-        </View>
 
-        {sortie.description ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Description</Text>
+            <Text style={styles.sectionTitle}>Informations</Text>
             <View style={styles.infoCard}>
-              <Text style={styles.descriptionText}>{sortie.description}</Text>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoIcon}>📅</Text>
+                <View>
+                  <Text style={styles.infoLabel}>Date & Heure</Text>
+                  <Text style={styles.infoVal}>{sortie.date_sortie} à {sortie.heure}</Text>
+                </View>
+              </View>
+              <View style={styles.infoDivider} />
+              <View style={styles.infoRow}>
+                <Text style={styles.infoIcon}>📍</Text>
+                <View>
+                  <Text style={styles.infoLabel}>Point de départ</Text>
+                  <Text style={styles.infoVal}>{sortie.lieu_rencontre || sortie.lieu}</Text>
+                </View>
+              </View>
+              <View style={styles.infoDivider} />
+              <View style={styles.infoRow}>
+                <Text style={styles.infoIcon}>👥</Text>
+                <View>
+                  <Text style={styles.infoLabel}>Participants</Text>
+                  <Text style={styles.infoVal}>{participants}/{sortie.participants_max} inscrits</Text>
+                </View>
+              </View>
             </View>
           </View>
-        ) : null}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Parcours</Text>
-          <View style={[styles.infoCard, styles.gpxCard]}>
-            <Text style={styles.gpxEmoji}>🗺️</Text>
-            <Text style={styles.gpxTitle}>Fichier GPX</Text>
-            <Text style={styles.gpxSub}>Disponible prochainement</Text>
-          </View>
-        </View>
-
-        {createur && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Organisateur</Text>
-            <TouchableOpacity style={styles.infoCard} onPress={() => setShowPublicProfile(true)}>
-              <View style={styles.createurRow}>
-                <View style={styles.createurAvatar}>
-                  <Text style={styles.createurInitials}>
-                    {createur.prenom?.[0]}{createur.nom?.[0]}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.createurName}>{createur.prenom} {createur.nom}</Text>
-                  <Text style={styles.createurVille}>📍 {createur.ville}</Text>
-                </View>
-                <Text style={{ fontSize: 20, color: '#8888bb' }}>›</Text>
+          {sortie.description ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Description</Text>
+              <View style={styles.infoCard}>
+                <Text style={styles.descriptionText}>{sortie.description}</Text>
               </View>
-            </TouchableOpacity>
+            </View>
+          ) : null}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Parcours</Text>
+            <View style={[styles.infoCard, styles.gpxCard]}>
+              <Text style={styles.gpxEmoji}>🗺️</Text>
+              <Text style={styles.gpxTitle}>Fichier GPX</Text>
+              <Text style={styles.gpxSub}>Disponible prochainement</Text>
+            </View>
+          </View>
+
+          {createur && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Organisateur</Text>
+              <TouchableOpacity style={styles.infoCard} onPress={() => setShowPublicProfile(true)}>
+                <View style={styles.createurRow}>
+                  {createur.avatar_url ? (
+                    <Image source={{ uri: createur.avatar_url }} style={styles.createurAvatar} />
+                  ) : (
+                    <View style={styles.createurAvatar}>
+                      <Text style={styles.createurInitials}>
+                        {createur.prenom?.[0]}{createur.nom?.[0]}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.createurName}>{createur.prenom} {createur.nom}</Text>
+                    <Text style={styles.createurVille}>📍 {createur.ville}</Text>
+                  </View>
+                  <Text style={{ fontSize: 20, color: '#8888bb' }}>›</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
+
+        </ScrollView>
+
+        {!isCreateur && (
+          <View style={styles.bottomBar}>
+            {hasJoined ? (
+              <View style={styles.joinedBtn}>
+                <Text style={styles.joinedText}>✅ Tu as rejoint cette sortie</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.joinBtn, loading && { opacity: 0.7 }]}
+                onPress={handleRejoindre}
+                disabled={loading}
+              >
+                <Text style={styles.joinText}>
+                  {loading ? 'Inscription...' : 'Rejoindre la sortie'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
-      </ScrollView>
-
-      {!isCreateur && (
-        <View style={styles.bottomBar}>
-          {hasJoined ? (
-            <View style={styles.joinedBtn}>
-              <Text style={styles.joinedText}>✅ Tu as rejoint cette sortie</Text>
+        {isCreateur && (
+          <View style={styles.bottomBar}>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity style={styles.editBtn} onPress={() => setShowEdit(true)}>
+                <Text style={styles.editBtnText}>✏️ Modifier</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
+                <Text style={styles.deleteBtnText}>🗑️ Supprimer</Text>
+              </TouchableOpacity>
             </View>
-          ) : (
-            <TouchableOpacity
-              style={[styles.joinBtn, loading && { opacity: 0.7 }]}
-              onPress={handleRejoindre}
-              disabled={loading}
-            >
-              <Text style={styles.joinText}>
-                {loading ? 'Inscription...' : 'Rejoindre la sortie'}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
-      {isCreateur && (
-        <View style={styles.bottomBar}>
-          <View style={styles.joinedBtn}>
-            <Text style={styles.joinedText}>👑 Tu es l'organisateur</Text>
           </View>
-        </View>
-      )}
+        )}
 
-    </View>
+      </View>
+    </SwipeBack>
   );
 }
 
@@ -309,4 +350,8 @@ const styles = StyleSheet.create({
   joinText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   joinedBtn: { backgroundColor: '#F4F3FF', borderRadius: 12, padding: 15, alignItems: 'center', borderWidth: 1, borderColor: '#DDD8FF' },
   joinedText: { fontSize: 14, fontWeight: '600', color: '#8888bb' },
+  editBtn: { flex: 1, backgroundColor: '#EEEDFE', borderRadius: 12, padding: 14, alignItems: 'center' },
+  editBtnText: { color: '#5B52F0', fontSize: 14, fontWeight: '700' },
+  deleteBtn: { flex: 1, backgroundColor: '#fff0f0', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#ffdddd' },
+  deleteBtnText: { color: '#e05c3a', fontSize: 14, fontWeight: '700' },
 });

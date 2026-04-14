@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { supabase } from '../lib/supabase';
+import SwipeBack from '../components/SwipeBack';
 
 const SPORT_COLORS: { [key: string]: string } = {
   route: '#4F46E5', vtt: '#f59f00', trail: '#5B52F0', running: '#A78BFA'
@@ -26,6 +27,7 @@ type Profile = {
   sport_principal: string;
   niveau: string;
   creneaux: string[];
+  avatar_url?: string;
 };
 
 type Sortie = {
@@ -79,103 +81,108 @@ export default function PublicProfileScreen({ userId, onBack }: Props) {
   const niveauColor = NIVEAU_COLORS[profile?.niveau || ''] || '#8888bb';
 
   if (loading) return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-          <Text style={styles.backArrow}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profil</Text>
-        <View style={{ width: 36 }} />
+    <SwipeBack onSwipeBack={onBack}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+            <Text style={styles.backArrow}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Profil</Text>
+          <View style={{ width: 36 }} />
+        </View>
+        <View style={styles.loadingWrap}>
+          <Text style={styles.loadingText}>Chargement...</Text>
+        </View>
       </View>
-      <View style={styles.loadingWrap}>
-        <Text style={styles.loadingText}>Chargement...</Text>
-      </View>
-    </View>
+    </SwipeBack>
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-          <Text style={styles.backArrow}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profil</Text>
-        <View style={{ width: 36 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
-
-        {/* Carte profil */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initiales}</Text>
-          </View>
-          <Text style={styles.profileName}>{profile?.prenom} {profile?.nom}</Text>
-          <Text style={styles.profileVille}>📍 {profile?.ville}</Text>
-
-          <View style={styles.badgesRow}>
-            <View style={[styles.badge, { backgroundColor: SPORT_COLORS[profile?.sport_principal || 'route'] + '20', borderColor: SPORT_COLORS[profile?.sport_principal || 'route'] }]}>
-              <Text style={[styles.badgeText, { color: SPORT_COLORS[profile?.sport_principal || 'route'] }]}>
-                {SPORT_EMOJIS[profile?.sport_principal || 'route']} {SPORT_LABELS[profile?.sport_principal || 'route']}
-              </Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: niveauColor + '20', borderColor: niveauColor }]}>
-              <Text style={[styles.badgeText, { color: niveauColor }]}>
-                📈 {profile?.niveau || 'Intermédiaire'}
-              </Text>
-            </View>
-          </View>
+    <SwipeBack onSwipeBack={onBack}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+            <Text style={styles.backArrow}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Profil</Text>
+          <View style={{ width: 36 }} />
         </View>
 
-        {/* Créneaux */}
-        {profile?.creneaux && Array.isArray(profile.creneaux) && profile.creneaux.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Créneaux préférés</Text>
-            <View style={styles.infoCard}>
-              <View style={styles.creneauxWrap}>
-                {profile.creneaux.map(c => (
-                  <View key={c} style={styles.creneauChip}>
-                    <Text style={styles.creneauText}>
-                      {c === 'matin' ? '🌅 Matin' :
-                       c === 'aprem' ? '☀️ Après-midi' :
-                       c === 'soir' ? '🌆 Soir' :
-                       c === 'weekend' ? '📅 Weekend' : c}
-                    </Text>
-                  </View>
-                ))}
+        <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
+
+          <View style={styles.profileCard}>
+            {profile?.avatar_url ? (
+              <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+            ) : (
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{initiales}</Text>
+              </View>
+            )}
+            <Text style={styles.profileName}>{profile?.prenom} {profile?.nom}</Text>
+            <Text style={styles.profileVille}>📍 {profile?.ville}</Text>
+
+            <View style={styles.badgesRow}>
+              <View style={[styles.badge, { backgroundColor: SPORT_COLORS[profile?.sport_principal || 'route'] + '20', borderColor: SPORT_COLORS[profile?.sport_principal || 'route'] }]}>
+                <Text style={[styles.badgeText, { color: SPORT_COLORS[profile?.sport_principal || 'route'] }]}>
+                  {SPORT_EMOJIS[profile?.sport_principal || 'route']} {SPORT_LABELS[profile?.sport_principal || 'route']}
+                </Text>
+              </View>
+              <View style={[styles.badge, { backgroundColor: niveauColor + '20', borderColor: niveauColor }]}>
+                <Text style={[styles.badgeText, { color: niveauColor }]}>
+                  📈 {profile?.niveau || 'Intermédiaire'}
+                </Text>
               </View>
             </View>
           </View>
-        )}
 
-        {/* Dernières sorties */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Sorties organisées</Text>
-          {sorties.length === 0 ? (
-            <View style={styles.infoCard}>
-              <Text style={styles.emptyText}>Aucune sortie créée pour l'instant</Text>
-            </View>
-          ) : (
-            sorties.map(ride => (
-              <View key={ride.id} style={styles.rideItem}>
-                <View style={[styles.rideIcon, { backgroundColor: SPORT_COLORS[ride.sport] + '20' }]}>
-                  <Text style={{ fontSize: 20 }}>{SPORT_EMOJIS[ride.sport]}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.rideName}>{ride.titre}</Text>
-                  <Text style={styles.rideDate}>{ride.date_sortie}</Text>
-                  <View style={styles.rideStats}>
-                    <Text style={styles.rideStat}>{ride.distance} km</Text>
-                    <Text style={styles.rideStat}>↗ {ride.elevation} m</Text>
-                  </View>
+          {profile?.creneaux && Array.isArray(profile.creneaux) && profile.creneaux.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Créneaux préférés</Text>
+              <View style={styles.infoCard}>
+                <View style={styles.creneauxWrap}>
+                  {profile.creneaux.map(c => (
+                    <View key={c} style={styles.creneauChip}>
+                      <Text style={styles.creneauText}>
+                        {c === 'matin' ? '🌅 Matin' :
+                         c === 'aprem' ? '☀️ Après-midi' :
+                         c === 'soir' ? '🌆 Soir' :
+                         c === 'weekend' ? '📅 Weekend' : c}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
               </View>
-            ))
+            </View>
           )}
-        </View>
 
-      </ScrollView>
-    </View>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Sorties organisées</Text>
+            {sorties.length === 0 ? (
+              <View style={styles.infoCard}>
+                <Text style={styles.emptyText}>Aucune sortie créée pour l'instant</Text>
+              </View>
+            ) : (
+              sorties.map(ride => (
+                <View key={ride.id} style={styles.rideItem}>
+                  <View style={[styles.rideIcon, { backgroundColor: SPORT_COLORS[ride.sport] + '20' }]}>
+                    <Text style={{ fontSize: 20 }}>{SPORT_EMOJIS[ride.sport]}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rideName}>{ride.titre}</Text>
+                    <Text style={styles.rideDate}>{ride.date_sortie}</Text>
+                    <View style={styles.rideStats}>
+                      <Text style={styles.rideStat}>{ride.distance} km</Text>
+                      <Text style={styles.rideStat}>↗ {ride.elevation} m</Text>
+                    </View>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+
+        </ScrollView>
+      </View>
+    </SwipeBack>
   );
 }
 

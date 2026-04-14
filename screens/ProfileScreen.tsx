@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
 import { supabase } from '../lib/supabase';
 import SettingsScreen from './SettingsScreen';
 
@@ -34,6 +34,7 @@ type Profile = {
   ville: string;
   sport_principal: string;
   niveau: string;
+  avatar_url?: string;
 };
 
 type Sortie = {
@@ -151,9 +152,13 @@ export default function ProfileScreen() {
 
         <View style={styles.profileCard}>
           <View style={styles.avatarWrap}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initiales}</Text>
-            </View>
+            {profile?.avatar_url ? (
+              <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+            ) : (
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{initiales}</Text>
+              </View>
+            )}
           </View>
           <Text style={styles.profileName}>{nomComplet}</Text>
           <View style={styles.locationRow}>
@@ -299,7 +304,6 @@ export default function ProfileScreen() {
             <TouchableOpacity style={styles.saveBtn} onPress={saveProfile}>
               <Text style={styles.saveBtnText}>Enregistrer les modifications</Text>
             </TouchableOpacity>
-
           </View>
         )}
 

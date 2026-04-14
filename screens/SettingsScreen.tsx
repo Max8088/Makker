@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../lib/supabase';
+import SwipeBack from '../components/SwipeBack';
 
 const SPORTS = [
   { id: 'route', label: 'Route', emoji: '🚴' },
@@ -37,18 +38,12 @@ export default function SettingsScreen({ onBack, onLogout }: { onBack: () => voi
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
+  useEffect(() => { fetchProfile(); }, []);
 
   const fetchProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
+    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
     if (data) {
       setPrenom(data.prenom || '');
       setNom(data.nom || '');
@@ -66,50 +61,27 @@ export default function SettingsScreen({ onBack, onLogout }: { onBack: () => voi
       Alert.alert('Permission refusée', 'Active l\'accès aux photos dans les réglages.');
       return;
     }
-  
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.5,
+      allowsEditing: true, aspect: [1, 1], quality: 0.5,
     });
-  
     if (result.canceled) return;
-  
     setUploadingAvatar(true);
-  
     try {
       const uri = result.assets[0].uri;
       const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-  
       const fileName = `${user.id}-${Date.now()}.${ext}`;
       const formData = new FormData();
-      formData.append('file', {
-        uri,
-        name: fileName,
-        type: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
-      } as any);
-  
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, formData, {
-          contentType: 'multipart/form-data',
-          upsert: true,
-        });
-  
+      formData.append('file', { uri, name: fileName, type: `image/${ext === 'jpg' ? 'jpeg' : ext}` } as any);
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, formData, { contentType: 'multipart/form-data', upsert: true });
       if (uploadError) throw uploadError;
-  
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName);
-  
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName);
       await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user.id);
       setAvatarUrl(publicUrl);
       Alert.alert('Photo mise à jour ! ✅', '');
     } catch (e) {
-      console.log('Erreur upload:', e);
       Alert.alert('Erreur', 'Impossible de télécharger la photo.');
     } finally {
       setUploadingAvatar(false);
@@ -117,153 +89,121 @@ export default function SettingsScreen({ onBack, onLogout }: { onBack: () => voi
   };
 
   const toggleCreneau = (id: string) => {
-    setCreneaux(prev =>
-      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
-    );
+    setCreneaux(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
   };
 
   const handleSave = async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    const { error } = await supabase
-      .from('profiles')
+    const { error } = await supabase.from('profiles')
       .update({ prenom, nom, ville, sport_principal: sportPrincipal, niveau, creneaux })
       .eq('id', user.id);
-
     setLoading(false);
-
-    if (error) {
-      Alert.alert('Erreur', error.message);
-    } else {
-      Alert.alert('Profil mis à jour ! ✅', '', [
-        { text: 'OK', onPress: onBack }
-      ]);
-    }
+    if (error) { Alert.alert('Erreur', error.message); }
+    else { Alert.alert('Profil mis à jour ! ✅', '', [{ text: 'OK', onPress: onBack }]); }
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Déconnexion',
-      'Tu es sûr de vouloir te déconnecter ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Déconnexion', style: 'destructive', onPress: onLogout },
-      ]
-    );
+    Alert.alert('Déconnexion', 'Tu es sûr de vouloir te déconnecter ?', [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Déconnexion', style: 'destructive', onPress: onLogout },
+    ]);
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-          <Text style={styles.backArrow}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Paramètres</Text>
-        <View style={{ width: 36 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: 40 }}>
-
-        {/* Avatar */}
-        <View style={styles.avatarSection}>
-          <TouchableOpacity onPress={handlePickAvatar} disabled={uploadingAvatar}>
-            {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarInitials}>
-                  {prenom?.[0]}{nom?.[0]}
-                </Text>
-              </View>
-            )}
-            <View style={styles.avatarEdit}>
-              <Text style={{ fontSize: 12 }}>📷</Text>
-            </View>
+    <SwipeBack onSwipeBack={onBack}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+            <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
-          {uploadingAvatar && <Text style={styles.uploadingText}>Upload en cours...</Text>}
-          <Text style={styles.avatarHint}>Appuie pour changer la photo</Text>
+          <Text style={styles.title}>Paramètres</Text>
+          <View style={{ width: 36 }} />
         </View>
 
-        {/* Infos personnelles */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Informations personnelles</Text>
-          <View style={styles.row}>
-            <View style={[styles.fieldGroup, { flex: 1 }]}>
-              <Text style={styles.label}>Prénom</Text>
-              <TextInput style={styles.input} value={prenom} onChangeText={setPrenom} placeholder="ex: Maxime" placeholderTextColor="#bbbbdd" />
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: 40 }}>
+
+          <View style={styles.avatarSection}>
+            <TouchableOpacity onPress={handlePickAvatar} disabled={uploadingAvatar}>
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Text style={styles.avatarInitials}>{prenom?.[0]}{nom?.[0]}</Text>
+                </View>
+              )}
+              <View style={styles.avatarEdit}>
+                <Text style={{ fontSize: 12 }}>📷</Text>
+              </View>
+            </TouchableOpacity>
+            {uploadingAvatar && <Text style={styles.uploadingText}>Upload en cours...</Text>}
+            <Text style={styles.avatarHint}>Appuie pour changer la photo</Text>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Informations personnelles</Text>
+            <View style={styles.row}>
+              <View style={[styles.fieldGroup, { flex: 1 }]}>
+                <Text style={styles.label}>Prénom</Text>
+                <TextInput style={styles.input} value={prenom} onChangeText={setPrenom} placeholder="ex: Maxime" placeholderTextColor="#bbbbdd" />
+              </View>
+              <View style={[styles.fieldGroup, { flex: 1 }]}>
+                <Text style={styles.label}>Nom</Text>
+                <TextInput style={styles.input} value={nom} onChangeText={setNom} placeholder="ex: Dupont" placeholderTextColor="#bbbbdd" />
+              </View>
             </View>
-            <View style={[styles.fieldGroup, { flex: 1 }]}>
-              <Text style={styles.label}>Nom</Text>
-              <TextInput style={styles.input} value={nom} onChangeText={setNom} placeholder="ex: Dupont" placeholderTextColor="#bbbbdd" />
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Ville</Text>
+              <TextInput style={styles.input} value={ville} onChangeText={setVille} placeholder="ex: Lyon" placeholderTextColor="#bbbbdd" />
             </View>
           </View>
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Ville</Text>
-            <TextInput style={styles.input} value={ville} onChangeText={setVille} placeholder="ex: Lyon" placeholderTextColor="#bbbbdd" />
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Sport principal</Text>
+            <View style={styles.sportGrid}>
+              {SPORTS.map(s => (
+                <TouchableOpacity key={s.id} style={[styles.sportBtn, sportPrincipal === s.id && styles.sportBtnActive]} onPress={() => setSportPrincipal(s.id)}>
+                  <Text style={styles.sportEmoji}>{s.emoji}</Text>
+                  <Text style={[styles.sportLabel, sportPrincipal === s.id && styles.sportLabelActive]}>{s.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
 
-        {/* Sport principal */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Sport principal</Text>
-          <View style={styles.sportGrid}>
-            {SPORTS.map(s => (
-              <TouchableOpacity
-                key={s.id}
-                style={[styles.sportBtn, sportPrincipal === s.id && styles.sportBtnActive]}
-                onPress={() => setSportPrincipal(s.id)}
-              >
-                <Text style={styles.sportEmoji}>{s.emoji}</Text>
-                <Text style={[styles.sportLabel, sportPrincipal === s.id && styles.sportLabelActive]}>{s.label}</Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Niveau</Text>
+            <View style={styles.levelRow}>
+              {NIVEAUX.map(n => (
+                <TouchableOpacity key={n.id} style={[styles.levelBtn, niveau === n.id && { borderColor: n.color, backgroundColor: n.color + '15' }]} onPress={() => setNiveau(n.id)}>
+                  <Text style={[styles.levelText, niveau === n.id && { color: n.color }]}>{n.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
 
-        {/* Niveau */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Niveau</Text>
-          <View style={styles.levelRow}>
-            {NIVEAUX.map(n => (
-              <TouchableOpacity
-                key={n.id}
-                style={[styles.levelBtn, niveau === n.id && { borderColor: n.color, backgroundColor: n.color + '15' }]}
-                onPress={() => setNiveau(n.id)}
-              >
-                <Text style={[styles.levelText, niveau === n.id && { color: n.color }]}>{n.label}</Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Créneaux préférés</Text>
+            <View style={styles.creneauxGrid}>
+              {CRENEAUX.map(c => (
+                <TouchableOpacity key={c.id} style={[styles.creneauBtn, creneaux.includes(c.id) && styles.creneauBtnActive]} onPress={() => toggleCreneau(c.id)}>
+                  <Text style={[styles.creneauText, creneaux.includes(c.id) && styles.creneauTextActive]}>{c.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
 
-        {/* Créneaux */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Créneaux préférés</Text>
-          <View style={styles.creneauxGrid}>
-            {CRENEAUX.map(c => (
-              <TouchableOpacity
-                key={c.id}
-                style={[styles.creneauBtn, creneaux.includes(c.id) && styles.creneauBtnActive]}
-                onPress={() => toggleCreneau(c.id)}
-              >
-                <Text style={[styles.creneauText, creneaux.includes(c.id) && styles.creneauTextActive]}>{c.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+          <TouchableOpacity style={[styles.saveBtn, loading && { opacity: 0.7 }]} onPress={handleSave} disabled={loading}>
+            <Text style={styles.saveBtnText}>{loading ? 'Enregistrement...' : 'Enregistrer les modifications'}</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.saveBtn, loading && { opacity: 0.7 }]} onPress={handleSave} disabled={loading}>
-          <Text style={styles.saveBtnText}>{loading ? 'Enregistrement...' : 'Enregistrer les modifications'}</Text>
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <Text style={styles.logoutText}>Se déconnecter</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Se déconnecter</Text>
-        </TouchableOpacity>
-
-      </ScrollView>
-    </View>
+        </ScrollView>
+      </View>
+    </SwipeBack>
   );
 }
 
