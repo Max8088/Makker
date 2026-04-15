@@ -1,5 +1,9 @@
 ﻿import React, { useState, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View, Text, ScrollView, TouchableOpacity, TextInput,
+  StyleSheet, Alert, KeyboardAvoidingView, Platform, Modal
+} from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '../lib/supabase';
 
 const SPORTS = [
@@ -15,19 +19,155 @@ const LEVELS = [
   { id: 'difficile', label: 'Difficile', color: '#e05c3a' },
 ];
 
+const JOURS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+const MOIS = [
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+];
+
 type Suggestion = {
   display_name: string;
   lat: string;
   lon: string;
   address: {
-    city?: string;
-    town?: string;
-    village?: string;
-    municipality?: string;
-    county?: string;
-    state?: string;
+    city?: string; town?: string; village?: string;
+    municipality?: string; county?: string; state?: string;
   };
 };
+
+// ─── Mini calendrier ──────────────────────────────────────────────────────────
+
+function MiniCalendar({ selectedDate, onSelect }: { selectedDate: string; onSelect: (date: string) => void; }) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+
+  const parseSelected = (): Date | null => {
+    if (!selectedDate) return null;
+    const parts = selectedDate.split('/');
+    if (parts.length !== 3) return null;
+    const d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    return isNaN(d.getTime()) ? null : d;
+  };
+  const selectedObj = parseSelected();
+
+  const firstDay = new Date(viewYear, viewMonth, 1);
+  let startOffset = firstDay.getDay() - 1;
+  if (startOffset < 0) startOffset = 6;
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); };
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); };
+
+  const handleDay = (day: number) => {
+    const picked = new Date(viewYear, viewMonth, day); picked.setHours(0, 0, 0, 0);
+    if (picked < today) return;
+    onSelect(`${String(day).padStart(2, '0')}/${String(viewMonth + 1).padStart(2, '0')}/${viewYear}`);
+  };
+
+  const isSelected = (day: number) => selectedObj?.getDate() === day && selectedObj?.getMonth() === viewMonth && selectedObj?.getFullYear() === viewYear;
+  const isToday = (day: number) => today.getDate() === day && today.getMonth() === viewMonth && today.getFullYear() === viewYear;
+  const isPast = (day: number) => { const d = new Date(viewYear, viewMonth, day); d.setHours(0, 0, 0, 0); return d < today; };
+
+  const cells: (number | null)[] = [...Array(startOffset).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+
+  return (
+    <View style={cal.wrapper}>
+      <View style={cal.nav}>
+        <TouchableOpacity style={cal.navBtn} onPress={prevMonth}><Text style={cal.navArrow}>‹</Text></TouchableOpacity>
+        <Text style={cal.navTitle}>{MOIS[viewMonth]} {viewYear}</Text>
+        <TouchableOpacity style={cal.navBtn} onPress={nextMonth}><Text style={cal.navArrow}>›</Text></TouchableOpacity>
+      </View>
+      <View style={cal.weekRow}>{JOURS.map((j, idx) => <Text key={idx} style={cal.weekDay}>{j}</Text>)}</View>
+      <View style={cal.grid}>
+        {cells.map((day, idx) => {
+          if (day === null) return <View key={`e-${idx}`} style={cal.cell} />;
+          const past = isPast(day); const selected = isSelected(day); const todayCell = isToday(day);
+          return (
+            <TouchableOpacity key={day} style={[cal.cell, todayCell && !selected && cal.todayCell, selected && cal.selectedCell, past && cal.pastCell]} onPress={() => handleDay(day)} disabled={past} activeOpacity={0.7}>
+              <Text style={[cal.dayText, todayCell && !selected && cal.todayText, selected && cal.selectedText, past && cal.pastText]}>{day}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ─── Sélecteur d'heure (roulette native) ─────────────────────────────────────
+
+function TimePicker({ time, onConfirm }: { time: string; onConfirm: (time: string) => void; }) {
+  const strToDate = (t: string): Date => {
+    const d = new Date();
+    const parts = t.split(':');
+    if (parts.length === 2) d.setHours(parseInt(parts[0]) || 7, parseInt(parts[1]) || 0, 0, 0);
+    else d.setHours(7, 0, 0, 0);
+    return d;
+  };
+
+  const [showPicker, setShowPicker] = useState(false);
+  const [tempDate, setTempDate] = useState<Date>(strToDate(time));
+
+  const handleOpen = () => { setTempDate(strToDate(time)); setShowPicker(true); };
+
+  const handleChange = (_: any, selected?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowPicker(false);
+      if (selected) onConfirm(`${String(selected.getHours()).padStart(2, '0')}:${String(selected.getMinutes()).padStart(2, '0')}`);
+    } else {
+      if (selected) setTempDate(selected);
+    }
+  };
+
+  const handleConfirm = () => {
+    onConfirm(`${String(tempDate.getHours()).padStart(2, '0')}:${String(tempDate.getMinutes()).padStart(2, '0')}`);
+    setShowPicker(false);
+  };
+
+  return (
+    <>
+      <TouchableOpacity style={[styles.input, styles.dateBtn, time && styles.inputConfirmed]} onPress={handleOpen} activeOpacity={0.8}>
+        <Text style={[styles.dateBtnText, !time && { color: '#bbbbdd' }]}>🕐  {time || 'Heure'}</Text>
+        <Text style={styles.dateBtnChevron}>▼</Text>
+      </TouchableOpacity>
+
+      {/* iOS : modal avec roulette + Confirmer */}
+      {Platform.OS === 'ios' && (
+        <Modal visible={showPicker} transparent animationType="slide">
+          <TouchableOpacity style={tp.overlay} activeOpacity={1} onPress={() => setShowPicker(false)} />
+          <View style={tp.sheet}>
+            <View style={tp.sheetHeader}>
+              <TouchableOpacity onPress={() => setShowPicker(false)}>
+                <Text style={tp.cancelText}>Annuler</Text>
+              </TouchableOpacity>
+              <Text style={tp.sheetTitle}>Heure de départ</Text>
+              <TouchableOpacity onPress={handleConfirm}>
+                <Text style={tp.confirmText}>Confirmer</Text>
+              </TouchableOpacity>
+            </View>
+            <DateTimePicker
+              value={tempDate}
+              mode="time"
+              display="spinner"
+              onChange={handleChange}
+              locale="fr-FR"
+              minuteInterval={5}
+              themeVariant="light"
+              style={{ height: 180, backgroundColor: '#fff' }}
+            />
+          </View>
+        </Modal>
+      )}
+
+      {/* Android : popup natif */}
+      {Platform.OS === 'android' && showPicker && (
+        <DateTimePicker value={tempDate} mode="time" display="default" onChange={handleChange} minuteInterval={5} />
+      )}
+    </>
+  );
+}
+
+// ─── CreateScreen ─────────────────────────────────────────────────────────────
 
 export default function CreateScreen() {
   const [selectedSport, setSelectedSport] = useState('route');
@@ -38,6 +178,7 @@ export default function CreateScreen() {
   const [elevation, setElevation] = useState('');
   const [pace, setPace] = useState('');
   const [date, setDate] = useState('');
+  const [showCalendar, setShowCalendar] = useState(false);
   const [time, setTime] = useState('');
   const [location, setLocation] = useState('');
   const [locationCoords, setLocationCoords] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -48,20 +189,16 @@ export default function CreateScreen() {
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const searchLocation = async (text: string) => {
-    setLocation(text);
-    setLocationCoords(null);
+    setLocation(text); setLocationCoords(null);
     if (text.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(async () => {
       try {
-        const query = encodeURIComponent(text);
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=5&addressdetails=1&countrycodes=fr`,
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=5&addressdetails=1&countrycodes=fr`,
           { headers: { 'User-Agent': 'MakkerApp/1.0' } }
         );
-        const results: Suggestion[] = await response.json();
-        setSuggestions(results);
-        setShowSuggestions(true);
+        setSuggestions(await response.json()); setShowSuggestions(true);
       } catch (e) { console.log('Erreur recherche:', e); }
     }, 400);
   };
@@ -69,25 +206,22 @@ export default function CreateScreen() {
   const selectSuggestion = (suggestion: Suggestion) => {
     const addr = suggestion.address;
     const ville = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
-    const label = ville
-      ? `${ville}${addr.state ? ', ' + addr.state : ''}`
-      : suggestion.display_name.split(',').slice(0, 2).join(',').trim();
+    const label = ville ? `${ville}${addr.state ? ', ' + addr.state : ''}` : suggestion.display_name.split(',').slice(0, 2).join(',').trim();
     setLocation(label);
     setLocationCoords({ latitude: parseFloat(suggestion.lat), longitude: parseFloat(suggestion.lon) });
-    setSuggestions([]);
-    setShowSuggestions(false);
+    setSuggestions([]); setShowSuggestions(false);
   };
 
   const resetForm = () => {
     setTitle(''); setDistance(''); setElevation(''); setPace('');
     setDate(''); setTime(''); setLocation(''); setLocationCoords(null);
     setDescription(''); setSelectedSport('route');
-    setSelectedLevel('intermediaire'); setParticipants(8);
+    setSelectedLevel('intermediaire'); setParticipants(8); setShowCalendar(false);
   };
 
   const handlePublish = async () => {
     if (!title || !date || !time || !distance || !location) {
-      Alert.alert('Champs manquants', 'Merci de remplir au minimum le titre, la date, l\'heure, la distance et le point de rendez-vous.');
+      Alert.alert('Champs manquants', "Merci de remplir au minimum le titre, la date, l'heure, la distance et le point de rendez-vous.");
       return;
     }
     if (!locationCoords) {
@@ -105,27 +239,27 @@ export default function CreateScreen() {
       latitude: locationCoords.latitude, longitude: locationCoords.longitude,
     });
     setLoading(false);
-    if (error) { Alert.alert('Erreur', error.message); }
-    else { Alert.alert('Sortie publiée ! 🎉', 'Ta sortie apparaît maintenant sur la carte.', [{ text: 'OK', onPress: resetForm }]); }
+    if (error) Alert.alert('Erreur', error.message);
+    else Alert.alert('Sortie publiée ! 🎉', 'Ta sortie apparaît maintenant sur la carte.', [{ text: 'OK', onPress: resetForm }]);
+  };
+
+  const dateBtnLabel = () => {
+    if (!date) return 'Choisir une date';
+    const parts = date.split('/');
+    if (parts.length !== 3) return date;
+    const d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Créer une sortie</Text>
           <Text style={styles.subtitle}>Partage ta prochaine aventure</Text>
         </View>
 
-        <ScrollView
-          style={styles.form}
-          contentContainerStyle={{ padding: 16, gap: 16 }}
-          keyboardShouldPersistTaps="handled"
-        >
+        <ScrollView style={styles.form} contentContainerStyle={{ padding: 16, gap: 16 }} keyboardShouldPersistTaps="handled">
 
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Titre de la sortie</Text>
@@ -144,14 +278,20 @@ export default function CreateScreen() {
             </View>
           </View>
 
+          {/* Date + Heure */}
           <View style={styles.row}>
-            <View style={[styles.fieldGroup, { flex: 1 }]}>
-              <Text style={styles.label}>Date</Text>
-              <TextInput style={styles.input} placeholder="12/04/2026" placeholderTextColor="#bbbbdd" value={date} onChangeText={setDate} />
+            <View style={[styles.fieldGroup, { flex: 2 }]}>
+              <Text style={styles.label}>Date{date ? <Text style={styles.confirmed}> ✓</Text> : ''}</Text>
+              <TouchableOpacity style={[styles.input, styles.dateBtn, date && styles.inputConfirmed]} onPress={() => setShowCalendar(v => !v)} activeOpacity={0.8}>
+                <Text style={[styles.dateBtnText, !date && { color: '#bbbbdd' }]}>📅  {dateBtnLabel()}</Text>
+                <Text style={styles.dateBtnChevron}>{showCalendar ? '▲' : '▼'}</Text>
+              </TouchableOpacity>
+              {showCalendar && <MiniCalendar selectedDate={date} onSelect={(d) => { setDate(d); setShowCalendar(false); }} />}
             </View>
+
             <View style={[styles.fieldGroup, { flex: 1 }]}>
-              <Text style={styles.label}>Heure</Text>
-              <TextInput style={styles.input} placeholder="07:00" placeholderTextColor="#bbbbdd" value={time} onChangeText={setTime} />
+              <Text style={styles.label}>Heure{time ? <Text style={styles.confirmed}> ✓</Text> : ''}</Text>
+              <TimePicker time={time} onConfirm={setTime} />
             </View>
           </View>
 
@@ -185,43 +325,23 @@ export default function CreateScreen() {
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Participants max</Text>
             <View style={styles.participantsRow}>
-              <TouchableOpacity style={styles.pBtn} onPress={() => setParticipants(Math.max(2, participants - 1))}>
-                <Text style={styles.pBtnText}>−</Text>
-              </TouchableOpacity>
+              <TouchableOpacity style={styles.pBtn} onPress={() => setParticipants(Math.max(2, participants - 1))}><Text style={styles.pBtnText}>−</Text></TouchableOpacity>
               <Text style={styles.pVal}>{participants}</Text>
-              <TouchableOpacity style={styles.pBtn} onPress={() => setParticipants(Math.min(20, participants + 1))}>
-                <Text style={styles.pBtnText}>+</Text>
-              </TouchableOpacity>
+              <TouchableOpacity style={styles.pBtn} onPress={() => setParticipants(Math.min(20, participants + 1))}><Text style={styles.pBtnText}>+</Text></TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>
-              Ville / Lieu de départ{' '}
-              {locationCoords && <Text style={styles.confirmed}>✓ Confirmé</Text>}
-            </Text>
-            <TextInput
-              style={[styles.input, locationCoords && styles.inputConfirmed]}
-              placeholder="ex: Lyon, Col de l'Oeillon..."
-              placeholderTextColor="#bbbbdd"
-              value={location}
-              onChangeText={searchLocation}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-            />
+            <Text style={styles.label}>Ville / Lieu de départ{locationCoords && <Text style={styles.confirmed}> ✓ Confirmé</Text>}</Text>
+            <TextInput style={[styles.input, locationCoords && styles.inputConfirmed]} placeholder="ex: Lyon, Col de l'Oeillon..." placeholderTextColor="#bbbbdd" value={location} onChangeText={searchLocation} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} />
             {showSuggestions && suggestions.length > 0 && (
               <View style={styles.suggestionsBox}>
                 {suggestions.map((s, i) => {
                   const addr = s.address;
                   const ville = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
-                  const label = ville
-                    ? `${ville}${addr.state ? ', ' + addr.state : ''}`
-                    : s.display_name.split(',').slice(0, 2).join(',').trim();
+                  const label = ville ? `${ville}${addr.state ? ', ' + addr.state : ''}` : s.display_name.split(',').slice(0, 2).join(',').trim();
                   return (
-                    <TouchableOpacity
-                      key={i}
-                      style={[styles.suggestionItem, i < suggestions.length - 1 && styles.suggestionBorder]}
-                      onPress={() => selectSuggestion(s)}
-                    >
+                    <TouchableOpacity key={i} style={[styles.suggestionItem, i < suggestions.length - 1 && styles.suggestionBorder]} onPress={() => selectSuggestion(s)}>
                       <Text style={styles.suggestionIcon}>📍</Text>
                       <Text style={styles.suggestionText}>{label}</Text>
                     </TouchableOpacity>
@@ -233,21 +353,11 @@ export default function CreateScreen() {
 
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Description <Text style={styles.optional}>(optionnel)</Text></Text>
-            <TextInput
-              style={[styles.input, styles.textarea]}
-              placeholder="Décris la sortie, conseils, matériel..."
-              placeholderTextColor="#bbbbdd"
-              multiline
-              numberOfLines={3}
-              value={description}
-              onChangeText={setDescription}
-            />
+            <TextInput style={[styles.input, styles.textarea]} placeholder="Décris la sortie, conseils, matériel..." placeholderTextColor="#bbbbdd" multiline numberOfLines={3} value={description} onChangeText={setDescription} />
           </View>
 
           <TouchableOpacity style={[styles.publishBtn, loading && { opacity: 0.7 }]} onPress={handlePublish} disabled={loading}>
-            <Text style={styles.publishText}>
-              {loading ? 'Publication en cours...' : 'Publier la sortie'}
-            </Text>
+            <Text style={styles.publishText}>{loading ? 'Publication en cours...' : 'Publier la sortie'}</Text>
           </TouchableOpacity>
 
           <View style={{ height: 20 }} />
@@ -256,6 +366,40 @@ export default function CreateScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+// ─── Styles TimePicker modal ──────────────────────────────────────────────────
+
+const tp = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
+  sheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 34 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#EEEDFE' },
+  sheetTitle: { fontSize: 15, fontWeight: '700', color: '#1a1a2e' },
+  cancelText: { fontSize: 14, color: '#8888bb', fontWeight: '500' },
+  confirmText: { fontSize: 14, color: '#5B52F0', fontWeight: '700' },
+});
+
+// ─── Styles calendrier ────────────────────────────────────────────────────────
+
+const cal = StyleSheet.create({
+  wrapper: { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1.5, borderColor: '#DDD8FF', padding: 14, marginTop: 8, shadowColor: '#5B52F0', shadowOpacity: 0.08, shadowRadius: 10, elevation: 4 },
+  nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  navBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#EEEDFE', alignItems: 'center', justifyContent: 'center' },
+  navArrow: { fontSize: 20, color: '#5B52F0', lineHeight: 24 },
+  navTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a2e', textTransform: 'capitalize' },
+  weekRow: { flexDirection: 'row', marginBottom: 6 },
+  weekDay: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: '#8888bb' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  cell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  todayCell: { borderWidth: 1.5, borderColor: '#5B52F0' },
+  selectedCell: { backgroundColor: '#5B52F0', borderRadius: 8 },
+  pastCell: { opacity: 0.3 },
+  dayText: { fontSize: 13, fontWeight: '500', color: '#1a1a2e' },
+  todayText: { color: '#5B52F0', fontWeight: '700' },
+  selectedText: { color: '#fff', fontWeight: '700' },
+  pastText: { color: '#8888bb' },
+});
+
+// ─── Styles écran ─────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F3FF', paddingTop: 56 },
@@ -271,6 +415,9 @@ const styles = StyleSheet.create({
   inputConfirmed: { borderColor: '#22c55e', backgroundColor: '#f0fdf4' },
   textarea: { height: 80, textAlignVertical: 'top' },
   row: { flexDirection: 'row', gap: 10 },
+  dateBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, paddingHorizontal: 11 },
+  dateBtnText: { fontSize: 13, color: '#1a1a2e', flex: 1 },
+  dateBtnChevron: { fontSize: 10, color: '#8888bb', marginLeft: 6 },
   sportGrid: { flexDirection: 'row', gap: 8 },
   sportBtn: { flex: 1, alignItems: 'center', padding: 10, borderRadius: 12, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff' },
   sportBtnActive: { borderColor: '#5B52F0', backgroundColor: '#EEEDFE' },

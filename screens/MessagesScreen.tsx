@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { useFocusEffect } from '@react-navigation/native';
 
 const SPORT_COLORS: { [key: string]: string } = {
   route: '#4F46E5', vtt: '#f59f00', trail: '#5B52F0', running: '#A78BFA'
@@ -31,11 +32,6 @@ export default function MessagesScreen() {
   const [newMessage, setNewMessage] = useState('');
   const [userId, setUserId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
-
-  useEffect(() => {
-    fetchUser();
-    fetchSorties();
-  }, []);
 
   const fetchUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -72,6 +68,18 @@ export default function MessagesScreen() {
 
     setSorties([...(creees || []), ...rejointes]);
   };
+
+  // Chargement initial
+  useEffect(() => {
+    fetchUser();
+  }, []);
+
+  // Rechargement à chaque fois que l'onglet Messages est affiché
+  useFocusEffect(
+    useCallback(() => {
+      fetchSorties();
+    }, [])
+  );
 
   const fetchMessages = async (sortieId: string) => {
     const { data, error } = await supabase

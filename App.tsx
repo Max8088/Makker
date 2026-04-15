@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text } from 'react-native';
@@ -8,6 +8,7 @@ import CreateScreen from './screens/CreateScreen';
 import MessagesScreen from './screens/MessagesScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import AuthScreen from './screens/AuthScreen';
+import { supabase } from './lib/supabase';
 
 const Tab = createBottomTabNavigator();
 
@@ -20,6 +21,20 @@ function TabIcon({ color, sport }: { color: string, sport: string }) {
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    // Vérifie la session existante au démarrage
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsLoggedIn(!!session);
+    });
+
+    // Écoute les changements de session (connexion / déconnexion)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   if (!isLoggedIn) return <AuthScreen onLogin={() => setIsLoggedIn(true)} />;
 

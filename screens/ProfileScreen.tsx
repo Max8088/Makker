@@ -64,73 +64,49 @@ export default function ProfileScreen() {
   const fetchProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-
-    if (data) {
-      setProfile(data);
-      setSportPrincipal(data.sport_principal || 'route');
-    }
+    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    if (data) { setProfile(data); setSportPrincipal(data.sport_principal || 'route'); }
     setLoading(false);
   };
 
   const fetchSorties = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
     const { data } = await supabase
       .from('sorties')
       .select('id, titre, sport, distance, elevation, date_sortie')
       .eq('createur_id', user.id)
       .order('created_at', { ascending: false });
-
     setSorties(data || []);
   };
 
   const saveProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({ sport_principal: sportPrincipal })
-      .eq('id', user.id);
-
-    if (error) {
-      Alert.alert('Erreur', error.message);
-    } else {
-      Alert.alert('Profil mis à jour ! ✅', '');
-    }
+    const { error } = await supabase.from('profiles').update({ sport_principal: sportPrincipal }).eq('id', user.id);
+    if (error) Alert.alert('Erreur', error.message);
+    else Alert.alert('Profil mis à jour ! ✅', '');
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  // MODIFIÉ : confirmation avant déconnexion
+  const handleLogout = () => {
+    Alert.alert('Déconnexion', 'Tu es sûr de vouloir te déconnecter ?', [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Déconnexion', style: 'destructive', onPress: () => supabase.auth.signOut() },
+    ]);
   };
 
   const toggleSecondaire = (id: string) => {
     if (id === sportPrincipal) return;
-    setSportsSecondaires(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-    );
+    setSportsSecondaires(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
   };
 
   const toggleCreneau = (id: string) => {
-    setCreneaux(prev =>
-      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
-    );
+    setCreneaux(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
   };
 
-  const initiales = profile
-    ? `${profile.prenom?.[0] || ''}${profile.nom?.[0] || ''}`.toUpperCase()
-    : '?';
-
-  const nomComplet = profile
-    ? `${profile.prenom || ''} ${profile.nom || ''}`.trim()
-    : 'Chargement...';
+  const initiales = profile ? `${profile.prenom?.[0] || ''}${profile.nom?.[0] || ''}`.toUpperCase() : '?';
+  const nomComplet = profile ? `${profile.prenom || ''} ${profile.nom || ''}`.trim() : 'Chargement...';
 
   if (showSettings) return (
     <SettingsScreen
@@ -141,11 +117,17 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
+      {/* MODIFIÉ : bouton déconnexion ajouté dans la topBar */}
       <View style={styles.topBar}>
         <Text style={styles.pageTitle}>Profil</Text>
-        <TouchableOpacity style={styles.settingsBtn} onPress={() => setShowSettings(true)}>
-          <Text style={{ fontSize: 16 }}>⚙️</Text>
-        </TouchableOpacity>
+        <View style={styles.topBarActions}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <Text style={styles.logoutBtnText}>↪ Déconnexion</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.settingsBtn} onPress={() => setShowSettings(true)}>
+            <Text style={{ fontSize: 16 }}>⚙️</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
@@ -187,11 +169,7 @@ export default function ProfileScreen() {
 
         <View style={styles.tabs}>
           {TABS.map(tab => (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.tab, activeTab === tab && styles.tabActive]}
-              onPress={() => setActiveTab(tab)}
-            >
+            <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && styles.tabActive]} onPress={() => setActiveTab(tab)}>
               <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
             </TouchableOpacity>
           ))}
@@ -201,18 +179,9 @@ export default function ProfileScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Mes sorties créées</Text>
             <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
-                <Text style={styles.statVal}>{sorties.length}</Text>
-                <Text style={styles.statLabel}>Sorties</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statVal}>—</Text>
-                <Text style={styles.statLabel}>km total</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statVal}>—</Text>
-                <Text style={styles.statLabel}>m D+</Text>
-              </View>
+              <View style={styles.statCard}><Text style={styles.statVal}>{sorties.length}</Text><Text style={styles.statLabel}>Sorties</Text></View>
+              <View style={styles.statCard}><Text style={styles.statVal}>—</Text><Text style={styles.statLabel}>km total</Text></View>
+              <View style={styles.statCard}><Text style={styles.statVal}>—</Text><Text style={styles.statLabel}>m D+</Text></View>
             </View>
           </View>
         )}
@@ -249,11 +218,7 @@ export default function ProfileScreen() {
             <Text style={styles.sectionTitle}>Sport principal</Text>
             <View style={styles.sportGrid}>
               {SPORTS.map(s => (
-                <TouchableOpacity
-                  key={s.id}
-                  style={[styles.sportBtn, sportPrincipal === s.id && { borderColor: '#5B52F0', backgroundColor: '#EEEDFE' }]}
-                  onPress={() => setSportPrincipal(s.id)}
-                >
+                <TouchableOpacity key={s.id} style={[styles.sportBtn, sportPrincipal === s.id && { borderColor: '#5B52F0', backgroundColor: '#EEEDFE' }]} onPress={() => setSportPrincipal(s.id)}>
                   <Text style={styles.sportEmoji}>{s.emoji}</Text>
                   <Text style={[styles.sportLabel, sportPrincipal === s.id && { color: '#5B52F0', fontWeight: '600' }]}>{s.label}</Text>
                 </TouchableOpacity>
@@ -263,16 +228,7 @@ export default function ProfileScreen() {
             <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Sports secondaires</Text>
             <View style={styles.sportGrid}>
               {SPORTS.map(s => (
-                <TouchableOpacity
-                  key={s.id}
-                  style={[
-                    styles.sportBtn,
-                    s.id === sportPrincipal && { opacity: 0.3 },
-                    sportsSecondaires.includes(s.id) && { borderColor: '#5B52F0', backgroundColor: '#EEEDFE' }
-                  ]}
-                  onPress={() => toggleSecondaire(s.id)}
-                  disabled={s.id === sportPrincipal}
-                >
+                <TouchableOpacity key={s.id} style={[styles.sportBtn, s.id === sportPrincipal && { opacity: 0.3 }, sportsSecondaires.includes(s.id) && { borderColor: '#5B52F0', backgroundColor: '#EEEDFE' }]} onPress={() => toggleSecondaire(s.id)} disabled={s.id === sportPrincipal}>
                   <Text style={styles.sportEmoji}>{s.emoji}</Text>
                   <Text style={[styles.sportLabel, sportsSecondaires.includes(s.id) && { color: '#5B52F0', fontWeight: '600' }]}>{s.label}</Text>
                 </TouchableOpacity>
@@ -291,11 +247,7 @@ export default function ProfileScreen() {
             <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Créneaux préférés</Text>
             <View style={styles.creneauxGrid}>
               {CRENEAUX.map(c => (
-                <TouchableOpacity
-                  key={c.id}
-                  style={[styles.creneauBtn, creneaux.includes(c.id) && styles.creneauBtnActive]}
-                  onPress={() => toggleCreneau(c.id)}
-                >
+                <TouchableOpacity key={c.id} style={[styles.creneauBtn, creneaux.includes(c.id) && styles.creneauBtnActive]} onPress={() => toggleCreneau(c.id)}>
                   <Text style={[styles.creneauText, creneaux.includes(c.id) && styles.creneauTextActive]}>{c.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -314,8 +266,12 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F3FF', paddingTop: 56 },
+  // MODIFIÉ : topBar avec flex pour aligner les deux boutons
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
   pageTitle: { fontSize: 26, fontWeight: '800', color: '#1a1a2e', letterSpacing: 1 },
+  topBarActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  logoutBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#ffdddd' },
+  logoutBtnText: { fontSize: 12, fontWeight: '600', color: '#e05c3a' },
   settingsBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#DDD8FF', alignItems: 'center', justifyContent: 'center' },
   profileCard: { backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 16, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#DDD8FF', marginBottom: 12 },
   avatarWrap: { marginBottom: 12 },
