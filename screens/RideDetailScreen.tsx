@@ -11,37 +11,25 @@ import { supabase } from '../lib/supabase';
 const SPORT_COLORS: { [key: string]: string } = {
   route: '#4F46E5', vtt: '#f59f00', trail: '#5B52F0', running: '#A78BFA'
 };
-
 const SPORT_EMOJIS: { [key: string]: string } = {
   route: '🚴', vtt: '🚵', trail: '🏔️', running: '🏃'
 };
-
 const SPORT_LABELS: { [key: string]: string } = {
   route: 'Cyclisme Route', vtt: 'VTT', trail: 'Trail', running: 'Running'
 };
-
 const NIVEAU_COLORS: { [key: string]: string } = {
   facile: '#22c55e', intermediaire: '#f59f00', difficile: '#e05c3a'
 };
 
 type Sortie = {
-  id: string;
-  titre: string;
-  sport: string;
-  distance: string;
-  elevation: string;
-  allure: string;
-  lieu: string;
-  lieu_rencontre: string;
-  date_sortie: string;
-  heure: string;
-  participants_max: number;
-  niveau: string;
-  description: string;
-  createur_id: string;
+  id: string; titre: string; sport: string; distance: string;
+  elevation: string; allure: string; lieu: string; lieu_rencontre: string;
+  date_sortie: string; heure: string; participants_max: number;
+  niveau: string; description: string; createur_id: string;
 };
 
 type Profile = {
+  id: string;
   prenom: string;
   nom: string;
   ville: string;
@@ -50,18 +38,30 @@ type Profile = {
   avatar_url?: string;
 };
 
-type Props = {
-  sortie: Sortie;
-  onBack: () => void;
-};
+type Props = { sortie: Sortie; onBack: () => void; };
+
+// Avatar réutilisable
+function Avatar({ profile, size = 44 }: { profile: Profile; size?: number }) {
+  const initiales = `${profile.prenom?.[0] || ''}${profile.nom?.[0] || ''}`.toUpperCase();
+  const radius = size * 0.3;
+  if (profile.avatar_url) {
+    return <Image source={{ uri: profile.avatar_url }} style={{ width: size, height: size, borderRadius: radius }} />;
+  }
+  return (
+    <View style={{ width: size, height: size, borderRadius: radius, backgroundColor: '#5B52F0', alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ fontSize: size * 0.35, fontWeight: '700', color: '#fff' }}>{initiales}</Text>
+    </View>
+  );
+}
 
 export default function RideDetailScreen({ sortie, onBack }: Props) {
   const [createur, setCreateur] = useState<Profile | null>(null);
-  const [participants, setParticipants] = useState(0);
+  const [participantsList, setParticipantsList] = useState<Profile[]>([]);
+  const [participantsCount, setParticipantsCount] = useState(0);
   const [hasJoined, setHasJoined] = useState(false);
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [showPublicProfile, setShowPublicProfile] = useState(false);
+  const [showPublicProfile, setShowPublicProfile] = useState<string | null>(null);
   const [showEdit, setShowEdit] = useState(false);
 
   useEffect(() => {
@@ -73,18 +73,29 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
   const fetchCreateur = async () => {
     const { data } = await supabase
       .from('profiles')
-      .select('prenom, nom, ville, niveau, sport_principal, avatar_url')
+      .select('id, prenom, nom, ville, niveau, sport_principal, avatar_url')
       .eq('id', sortie.createur_id)
       .single();
     if (data) setCreateur(data);
   };
 
   const fetchParticipants = async () => {
-    const { count } = await supabase
+    // Récupère les user_id des participants
+    const { data: parts, count } = await supabase
       .from('participations')
-      .select('*', { count: 'exact', head: true })
+      .select('user_id', { count: 'exact' })
       .eq('sortie_id', sortie.id);
-    setParticipants(count || 0);
+
+    setParticipantsCount(count || 0);
+
+    if (parts && parts.length > 0) {
+      const ids = parts.map(p => p.user_id);
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, prenom, nom, avatar_url, ville, niveau, sport_principal')
+        .in('id', ids);
+      setParticipantsList(profiles || []);
+    }
   };
 
   const checkIfJoined = async () => {
@@ -104,53 +115,40 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
     if (!currentUserId) return;
     setLoading(true);
     const { error } = await supabase.from('participations').insert({
-      sortie_id: sortie.id,
-      user_id: currentUserId,
+      sortie_id: sortie.id, user_id: currentUserId,
     });
     setLoading(false);
     if (error) {
       Alert.alert('Erreur', 'Tu as peut-être déjà rejoint cette sortie.');
     } else {
       setHasJoined(true);
-      setParticipants(prev => prev + 1);
+      setParticipantsCount(prev => prev + 1);
+      // Recharge la liste pour afficher le nouveau participant
+      fetchParticipants();
       Alert.alert('Super ! 🎉', 'Tu as rejoint la sortie !');
     }
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      'Supprimer la sortie',
-      'Cette action est irréversible. Tu es sûr ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer', style: 'destructive',
-          onPress: async () => {
-            await supabase.from('sorties').delete().eq('id', sortie.id);
-            Alert.alert('Sortie supprimée ✅', '');
-            onBack();
-          }
-        }
-      ]
-    );
+    Alert.alert('Supprimer la sortie', 'Cette action est irréversible. Tu es sûr ?', [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Supprimer', style: 'destructive', onPress: async () => {
+        await supabase.from('sorties').delete().eq('id', sortie.id);
+        Alert.alert('Sortie supprimée ✅', '');
+        onBack();
+      }},
+    ]);
   };
 
   const isCreateur = currentUserId === sortie.createur_id;
   const niveauColor = NIVEAU_COLORS[sortie.niveau] || '#8888bb';
 
   if (showEdit) return (
-    <EditRideScreen
-      sortie={sortie}
-      onBack={() => setShowEdit(false)}
-      onSaved={() => { setShowEdit(false); onBack(); }}
-    />
+    <EditRideScreen sortie={sortie} onBack={() => setShowEdit(false)} onSaved={() => { setShowEdit(false); onBack(); }} />
   );
 
   if (showPublicProfile) return (
-    <PublicProfileScreen
-      userId={sortie.createur_id}
-      onBack={() => setShowPublicProfile(false)}
-    />
+    <PublicProfileScreen userId={showPublicProfile} onBack={() => setShowPublicProfile(null)} />
   );
 
   return (
@@ -221,7 +219,7 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
                 <Text style={styles.infoIcon}>👥</Text>
                 <View>
                   <Text style={styles.infoLabel}>Participants</Text>
-                  <Text style={styles.infoVal}>{participants}/{sortie.participants_max} inscrits</Text>
+                  <Text style={styles.infoVal}>{participantsCount}/{sortie.participants_max} inscrits</Text>
                 </View>
               </View>
             </View>
@@ -245,29 +243,52 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
             </View>
           </View>
 
+          {/* Organisateur */}
           {createur && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Organisateur</Text>
-              <TouchableOpacity style={styles.infoCard} onPress={() => setShowPublicProfile(true)}>
-                <View style={styles.createurRow}>
-                  {createur.avatar_url ? (
-                    <Image source={{ uri: createur.avatar_url }} style={styles.createurAvatar} />
-                  ) : (
-                    <View style={styles.createurAvatar}>
-                      <Text style={styles.createurInitials}>
-                        {createur.prenom?.[0]}{createur.nom?.[0]}
-                      </Text>
-                    </View>
-                  )}
+              <TouchableOpacity style={styles.infoCard} onPress={() => setShowPublicProfile(sortie.createur_id)} activeOpacity={0.8}>
+                <View style={styles.personRow}>
+                  <Avatar profile={createur} size={44} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.createurName}>{createur.prenom} {createur.nom}</Text>
-                    <Text style={styles.createurVille}>📍 {createur.ville}</Text>
+                    <Text style={styles.personName}>{createur.prenom} {createur.nom}</Text>
+                    <Text style={styles.personSub}>📍 {createur.ville}</Text>
                   </View>
                   <Text style={{ fontSize: 20, color: '#8888bb' }}>›</Text>
                 </View>
               </TouchableOpacity>
             </View>
           )}
+
+          {/* Participants */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              Participants ({participantsCount}/{sortie.participants_max})
+            </Text>
+            <View style={styles.infoCard}>
+              {participantsList.length === 0 ? (
+                <Text style={styles.emptyParticipants}>Aucun participant pour l'instant.</Text>
+              ) : (
+                participantsList.map((p, i) => (
+                  <React.Fragment key={p.id}>
+                    {i > 0 && <View style={styles.infoDivider} />}
+                    <TouchableOpacity
+                      style={styles.personRow}
+                      onPress={() => setShowPublicProfile(p.id)}
+                      activeOpacity={0.8}
+                    >
+                      <Avatar profile={p} size={40} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.personName}>{p.prenom} {p.nom}</Text>
+                        <Text style={styles.personSub}>📍 {p.ville}</Text>
+                      </View>
+                      <Text style={{ fontSize: 20, color: '#8888bb' }}>›</Text>
+                    </TouchableOpacity>
+                  </React.Fragment>
+                ))
+              )}
+            </View>
+          </View>
 
         </ScrollView>
 
@@ -278,14 +299,8 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
                 <Text style={styles.joinedText}>✅ Tu as rejoint cette sortie</Text>
               </View>
             ) : (
-              <TouchableOpacity
-                style={[styles.joinBtn, loading && { opacity: 0.7 }]}
-                onPress={handleRejoindre}
-                disabled={loading}
-              >
-                <Text style={styles.joinText}>
-                  {loading ? 'Inscription...' : 'Rejoindre la sortie'}
-                </Text>
+              <TouchableOpacity style={[styles.joinBtn, loading && { opacity: 0.7 }]} onPress={handleRejoindre} disabled={loading}>
+                <Text style={styles.joinText}>{loading ? 'Inscription...' : 'Rejoindre la sortie'}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -340,11 +355,12 @@ const styles = StyleSheet.create({
   gpxEmoji: { fontSize: 32 },
   gpxTitle: { fontSize: 14, fontWeight: '600', color: '#1a1a2e' },
   gpxSub: { fontSize: 12, color: '#8888bb' },
-  createurRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  createurAvatar: { width: 44, height: 44, borderRadius: 13, backgroundColor: '#5B52F0', alignItems: 'center', justifyContent: 'center' },
-  createurInitials: { fontSize: 16, fontWeight: '700', color: '#fff' },
-  createurName: { fontSize: 14, fontWeight: '600', color: '#1a1a2e' },
-  createurVille: { fontSize: 12, color: '#8888bb', marginTop: 2 },
+  // Ligne personne (organisateur + participants)
+  personRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  personName: { fontSize: 14, fontWeight: '600', color: '#1a1a2e' },
+  personSub: { fontSize: 12, color: '#8888bb', marginTop: 2 },
+  emptyParticipants: { fontSize: 13, color: '#8888bb', textAlign: 'center', paddingVertical: 8 },
+  // Bottom bar
   bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#DDD8FF' },
   joinBtn: { backgroundColor: '#5B52F0', borderRadius: 12, padding: 15, alignItems: 'center' },
   joinText: { color: '#fff', fontSize: 15, fontWeight: '700' },
