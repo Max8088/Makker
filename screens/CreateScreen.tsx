@@ -30,8 +30,20 @@ type Suggestion = {
   lat: string;
   lon: string;
   address: {
-    city?: string; town?: string; village?: string;
-    municipality?: string; county?: string; state?: string;
+    amenity?: string;
+    tourism?: string;
+    leisure?: string;
+    neighbourhood?: string;
+    suburb?: string;
+    quarter?: string;
+    road?: string;
+    city_district?: string;
+    city?: string;
+    town?: string;
+    village?: string;
+    municipality?: string;
+    county?: string;
+    state?: string;
   };
 };
 
@@ -195,7 +207,7 @@ export default function CreateScreen() {
     searchTimeout.current = setTimeout(async () => {
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=5&addressdetails=1&countrycodes=fr`,
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=8&addressdetails=1&countrycodes=fr`,
           { headers: { 'User-Agent': 'MakkerApp/1.0' } }
         );
         setSuggestions(await response.json()); setShowSuggestions(true);
@@ -203,11 +215,17 @@ export default function CreateScreen() {
     }, 400);
   };
 
-  const selectSuggestion = (suggestion: Suggestion) => {
-    const addr = suggestion.address;
+  const buildLabel = (s: Suggestion): string => {
+    const addr = s.address;
+    const lieu = addr.amenity || addr.tourism || addr.leisure || addr.neighbourhood || addr.suburb || addr.quarter || addr.road || '';
     const ville = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
-    const label = ville ? `${ville}${addr.state ? ', ' + addr.state : ''}` : suggestion.display_name.split(',').slice(0, 2).join(',').trim();
-    setLocation(label);
+    if (lieu && ville) return `${lieu}, ${ville}`;
+    if (ville) return ville;
+    return s.display_name.split(',').slice(0, 3).join(',').trim();
+  };
+
+  const selectSuggestion = (suggestion: Suggestion) => {
+    setLocation(buildLabel(suggestion));
     setLocationCoords({ latitude: parseFloat(suggestion.lat), longitude: parseFloat(suggestion.lon) });
     setSuggestions([]); setShowSuggestions(false);
   };
@@ -336,17 +354,12 @@ export default function CreateScreen() {
             <TextInput style={[styles.input, locationCoords && styles.inputConfirmed]} placeholder="ex: Lyon, Col de l'Oeillon..." placeholderTextColor="#bbbbdd" value={location} onChangeText={searchLocation} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} />
             {showSuggestions && suggestions.length > 0 && (
               <View style={styles.suggestionsBox}>
-                {suggestions.map((s, i) => {
-                  const addr = s.address;
-                  const ville = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
-                  const label = ville ? `${ville}${addr.state ? ', ' + addr.state : ''}` : s.display_name.split(',').slice(0, 2).join(',').trim();
-                  return (
-                    <TouchableOpacity key={i} style={[styles.suggestionItem, i < suggestions.length - 1 && styles.suggestionBorder]} onPress={() => selectSuggestion(s)}>
-                      <Text style={styles.suggestionIcon}>📍</Text>
-                      <Text style={styles.suggestionText}>{label}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                {suggestions.map((s, i) => (
+                  <TouchableOpacity key={i} style={[styles.suggestionItem, i < suggestions.length - 1 && styles.suggestionBorder]} onPress={() => selectSuggestion(s)}>
+                    <Text style={styles.suggestionIcon}>📍</Text>
+                    <Text style={styles.suggestionText}>{buildLabel(s)}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
           </View>

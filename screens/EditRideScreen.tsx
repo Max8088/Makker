@@ -36,7 +36,13 @@ type Sortie = {
 
 type Suggestion = {
   display_name: string; lat: string; lon: string;
-  address: { city?: string; town?: string; village?: string; municipality?: string; county?: string; state?: string; };
+  address: {
+    amenity?: string; tourism?: string; leisure?: string;
+    neighbourhood?: string; suburb?: string; quarter?: string;
+    road?: string; city_district?: string;
+    city?: string; town?: string; village?: string;
+    municipality?: string; county?: string; state?: string;
+  };
 };
 
 type Props = { sortie: Sortie; onBack: () => void; onSaved: () => void; };
@@ -208,7 +214,7 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
     searchTimeout.current = setTimeout(async () => {
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=5&addressdetails=1&countrycodes=fr`,
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=8&addressdetails=1&countrycodes=fr`,
           { headers: { 'User-Agent': 'MakkerApp/1.0' } }
         );
         setSuggestions(await response.json()); setShowSuggestions(true);
@@ -216,11 +222,17 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
     }, 400);
   };
 
-  const selectSuggestion = (s: Suggestion) => {
+  const buildLabel = (s: Suggestion): string => {
     const addr = s.address;
+    const lieu = addr.amenity || addr.tourism || addr.leisure || addr.neighbourhood || addr.suburb || addr.quarter || addr.road || '';
     const ville = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
-    const label = ville ? `${ville}${addr.state ? ', ' + addr.state : ''}` : s.display_name.split(',').slice(0, 2).join(',').trim();
-    setLieu(label);
+    if (lieu && ville) return `${lieu}, ${ville}`;
+    if (ville) return ville;
+    return s.display_name.split(',').slice(0, 3).join(',').trim();
+  };
+
+  const selectSuggestion = (s: Suggestion) => {
+    setLieu(buildLabel(s));
     setLocationCoords({ latitude: parseFloat(s.lat), longitude: parseFloat(s.lon) });
     setSuggestions([]); setShowSuggestions(false);
   };
@@ -320,17 +332,12 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
             <TextInput style={[styles.input, locationCoords && styles.inputConfirmed]} value={lieu} onChangeText={searchLocation} placeholder="ex: Lyon, Col de l'Oeillon..." placeholderTextColor="#bbbbdd" onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} />
             {showSuggestions && suggestions.length > 0 && (
               <View style={styles.suggestionsBox}>
-                {suggestions.map((s, i) => {
-                  const addr = s.address;
-                  const ville = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
-                  const label = ville ? `${ville}${addr.state ? ', ' + addr.state : ''}` : s.display_name.split(',').slice(0, 2).join(',').trim();
-                  return (
-                    <TouchableOpacity key={i} style={[styles.suggestionItem, i < suggestions.length - 1 && styles.suggestionBorder]} onPress={() => selectSuggestion(s)}>
-                      <Text style={styles.suggestionIcon}>📍</Text>
-                      <Text style={styles.suggestionText}>{label}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                {suggestions.map((s, i) => (
+                  <TouchableOpacity key={i} style={[styles.suggestionItem, i < suggestions.length - 1 && styles.suggestionBorder]} onPress={() => selectSuggestion(s)}>
+                    <Text style={styles.suggestionIcon}>📍</Text>
+                    <Text style={styles.suggestionText}>{buildLabel(s)}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
           </View>
