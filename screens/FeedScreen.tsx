@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Alert, Image } from 'react-native';
 import { supabase } from '../lib/supabase';
 import FiltersSheet, { Filters, defaultFilters } from './FiltersSheet';
 import RideDetailScreen from './RideDetailScreen';
@@ -145,13 +145,17 @@ export default function FeedScreen() {
           <Text style={styles.title}>Makker</Text>
           <Text style={styles.subtitle}>Trouve ta prochaine aventure</Text>
         </View>
-        <TouchableOpacity
-          style={[styles.filterBtn, activeFiltersCount > 0 && styles.filterBtnActive]}
-          onPress={() => setShowFilters(true)}
-        >
-          <Text style={[styles.filterBtnText, activeFiltersCount > 0 && styles.filterBtnTextActive]}>
-            ⚡ Filtres{activeFiltersCount > 0 ? ` (${activeFiltersCount})` : ''}
-          </Text>
+        <TouchableOpacity style={styles.filterBtn} onPress={() => setShowFilters(true)}>
+          <Image
+            source={require('../assets/icons/filtre_icon.png')}
+            style={{ width: 42, height: 42 }}
+            resizeMode="contain"
+          />
+          {activeFiltersCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -234,10 +238,13 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
   title: { fontSize: 26, fontWeight: '800', color: '#1a1a2e', letterSpacing: 1 },
   subtitle: { fontSize: 13, color: '#8888bb', marginTop: 2 },
-  filterBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff' },
-  filterBtnActive: { backgroundColor: '#5B52F0', borderColor: '#5B52F0' },
-  filterBtnText: { fontSize: 12, fontWeight: '600', color: '#8888bb' },
-  filterBtnTextActive: { color: '#fff' },
+  filterBtn: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
+  filterBadge: {
+    position: 'absolute', top: -2, right: -2,
+    width: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#e05c3a', alignItems: 'center', justifyContent: 'center',
+  },
+  filterBadgeText: { fontSize: 9, fontWeight: '700', color: '#fff' },
   filtersRow: { maxHeight: 44, marginBottom: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff' },
   chipActive: { backgroundColor: '#5B52F0', borderColor: '#5B52F0' },

@@ -40,7 +40,6 @@ type Profile = {
 
 type Props = { sortie: Sortie; onBack: () => void; };
 
-// Avatar réutilisable
 function Avatar({ profile, size = 44 }: { profile: Profile; size?: number }) {
   const initiales = `${profile.prenom?.[0] || ''}${profile.nom?.[0] || ''}`.toUpperCase();
   const radius = size * 0.3;
@@ -80,7 +79,6 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
   };
 
   const fetchParticipants = async () => {
-    // Récupère les user_id des participants
     const { data: parts, count } = await supabase
       .from('participations')
       .select('user_id', { count: 'exact' })
@@ -123,7 +121,6 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
     } else {
       setHasJoined(true);
       setParticipantsCount(prev => prev + 1);
-      // Recharge la liste pour afficher le nouveau participant
       fetchParticipants();
       Alert.alert('Super ! 🎉', 'Tu as rejoint la sortie !');
     }
@@ -243,7 +240,6 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
             </View>
           </View>
 
-          {/* Organisateur */}
           {createur && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Organisateur</Text>
@@ -260,7 +256,6 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
             </View>
           )}
 
-          {/* Participants */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
               Participants ({participantsCount}/{sortie.participants_max})
@@ -272,11 +267,7 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
                 participantsList.map((p, i) => (
                   <React.Fragment key={p.id}>
                     {i > 0 && <View style={styles.infoDivider} />}
-                    <TouchableOpacity
-                      style={styles.personRow}
-                      onPress={() => setShowPublicProfile(p.id)}
-                      activeOpacity={0.8}
-                    >
+                    <TouchableOpacity style={styles.personRow} onPress={() => setShowPublicProfile(p.id)} activeOpacity={0.8}>
                       <Avatar profile={p} size={40} />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.personName}>{p.prenom} {p.nom}</Text>
@@ -306,18 +297,28 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
           </View>
         )}
 
-        {isCreateur && (
-          <View style={styles.bottomBar}>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <TouchableOpacity style={styles.editBtn} onPress={() => setShowEdit(true)}>
-                <Text style={styles.editBtnText}>✏️ Modifier</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-                <Text style={styles.deleteBtnText}>🗑️ Supprimer</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+{isCreateur && (
+  <View style={styles.bottomBar}>
+    <View style={{ flexDirection: 'row', gap: 10 }}>
+      <TouchableOpacity style={styles.editBtn} onPress={() => setShowEdit(true)}>
+        <Image
+          source={require('../assets/icons/modifier_icon.png')}
+          style={{ width: 28, height: 28 }}
+          resizeMode="contain"
+        />
+        <Text style={styles.editBtnText}>Modifier</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
+        <Image
+          source={require('../assets/icons/supprimer_icon.png')}
+          style={{ width: 28, height: 28 }}
+          resizeMode="contain"
+        />
+        <Text style={styles.deleteBtnText}>Supprimer</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+)}
 
       </View>
     </SwipeBack>
@@ -355,19 +356,17 @@ const styles = StyleSheet.create({
   gpxEmoji: { fontSize: 32 },
   gpxTitle: { fontSize: 14, fontWeight: '600', color: '#1a1a2e' },
   gpxSub: { fontSize: 12, color: '#8888bb' },
-  // Ligne personne (organisateur + participants)
   personRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   personName: { fontSize: 14, fontWeight: '600', color: '#1a1a2e' },
   personSub: { fontSize: 12, color: '#8888bb', marginTop: 2 },
   emptyParticipants: { fontSize: 13, color: '#8888bb', textAlign: 'center', paddingVertical: 8 },
-  // Bottom bar
   bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#DDD8FF' },
   joinBtn: { backgroundColor: '#5B52F0', borderRadius: 12, padding: 15, alignItems: 'center' },
   joinText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   joinedBtn: { backgroundColor: '#F4F3FF', borderRadius: 12, padding: 15, alignItems: 'center', borderWidth: 1, borderColor: '#DDD8FF' },
   joinedText: { fontSize: 14, fontWeight: '600', color: '#8888bb' },
-  editBtn: { flex: 1, backgroundColor: '#EEEDFE', borderRadius: 12, padding: 14, alignItems: 'center' },
-  editBtnText: { color: '#5B52F0', fontSize: 14, fontWeight: '700' },
-  deleteBtn: { flex: 1, backgroundColor: '#fff0f0', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#ffdddd' },
-  deleteBtnText: { color: '#e05c3a', fontSize: 14, fontWeight: '700' },
+  editBtn: { flex: 1, backgroundColor: '#EEEDFE', borderRadius: 12, padding: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },
+editBtnText: { color: '#5B52F0', fontSize: 14, fontWeight: '700' },
+deleteBtn: { flex: 1, backgroundColor: '#fff0f0', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#ffdddd', flexDirection: 'row', justifyContent: 'center', gap: 8 },
+deleteBtnText: { color: '#e05c3a', fontSize: 14, fontWeight: '700' },
 });
