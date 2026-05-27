@@ -21,6 +21,9 @@ const NIVEAU_COLORS: { [key: string]: string } = {
   facile: '#22c55e', intermediaire: '#f59f00', difficile: '#e05c3a'
 };
 
+// ─── Helper : détermine si le sport est vélo ──────────────────────────────────
+const isVelo = (sport: string) => sport === 'route' || sport === 'vtt';
+
 type Sortie = {
   id: string; titre: string; sport: string; distance: string;
   elevation: string; allure: string; lieu: string; lieu_rencontre: string;
@@ -140,6 +143,11 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
   const isCreateur = currentUserId === sortie.createur_id;
   const niveauColor = NIVEAU_COLORS[sortie.niveau] || '#8888bb';
 
+  // ─── Allure : label et valeur avec unité ──────────────────────────────────
+  const paceLabel = isVelo(sortie.sport) ? 'Vitesse' : 'Allure';
+  const paceUnit = isVelo(sortie.sport) ? 'km/h' : '/km';
+  const paceDisplay = sortie.allure ? `${sortie.allure} ${paceUnit}` : '—';
+
   if (showEdit) return (
     <EditRideScreen sortie={sortie} onBack={() => setShowEdit(false)} onSaved={() => { setShowEdit(false); onBack(); }} />
   );
@@ -187,8 +195,8 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
-                <Text style={styles.statVal}>{sortie.allure}</Text>
-                <Text style={styles.statLabel}>Allure</Text>
+                <Text style={[styles.statVal, styles.statValSmall]}>{paceDisplay}</Text>
+                <Text style={styles.statLabel}>{paceLabel}</Text>
               </View>
             </View>
           </View>
@@ -297,28 +305,28 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
           </View>
         )}
 
-{isCreateur && (
-  <View style={styles.bottomBar}>
-    <View style={{ flexDirection: 'row', gap: 10 }}>
-      <TouchableOpacity style={styles.editBtn} onPress={() => setShowEdit(true)}>
-        <Image
-          source={require('../assets/icons/modifier_icon.png')}
-          style={{ width: 28, height: 28 }}
-          resizeMode="contain"
-        />
-        <Text style={styles.editBtnText}>Modifier</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-        <Image
-          source={require('../assets/icons/supprimer_icon.png')}
-          style={{ width: 28, height: 28 }}
-          resizeMode="contain"
-        />
-        <Text style={styles.deleteBtnText}>Supprimer</Text>
-      </TouchableOpacity>
-    </View>
-  </View>
-)}
+        {isCreateur && (
+          <View style={styles.bottomBar}>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity style={styles.editBtn} onPress={() => setShowEdit(true)}>
+                <Image
+                  source={require('../assets/icons/modifier_icon.png')}
+                  style={{ width: 28, height: 28 }}
+                  resizeMode="contain"
+                />
+                <Text style={styles.editBtnText}>Modifier</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
+                <Image
+                  source={require('../assets/icons/supprimer_icon.png')}
+                  style={{ width: 28, height: 28 }}
+                  resizeMode="contain"
+                />
+                <Text style={styles.deleteBtnText}>Supprimer</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
       </View>
     </SwipeBack>
@@ -342,6 +350,7 @@ const styles = StyleSheet.create({
   statItem: { flex: 1, alignItems: 'center' },
   statVal: { fontSize: 16, fontWeight: '700', color: '#1a1a2e' },
   statLabel: { fontSize: 11, color: '#8888bb', marginTop: 2 },
+  statValSmall: { fontSize: 13 },
   statDivider: { width: 1, height: 30, backgroundColor: '#DDD8FF' },
   section: { paddingHorizontal: 16, marginBottom: 12 },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: '#1a1a2e', marginBottom: 8 },
@@ -366,7 +375,7 @@ const styles = StyleSheet.create({
   joinedBtn: { backgroundColor: '#F4F3FF', borderRadius: 12, padding: 15, alignItems: 'center', borderWidth: 1, borderColor: '#DDD8FF' },
   joinedText: { fontSize: 14, fontWeight: '600', color: '#8888bb' },
   editBtn: { flex: 1, backgroundColor: '#EEEDFE', borderRadius: 12, padding: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },
-editBtnText: { color: '#5B52F0', fontSize: 14, fontWeight: '700' },
-deleteBtn: { flex: 1, backgroundColor: '#fff0f0', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#ffdddd', flexDirection: 'row', justifyContent: 'center', gap: 8 },
-deleteBtnText: { color: '#e05c3a', fontSize: 14, fontWeight: '700' },
+  editBtnText: { color: '#5B52F0', fontSize: 14, fontWeight: '700' },
+  deleteBtn: { flex: 1, backgroundColor: '#fff0f0', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#ffdddd', flexDirection: 'row', justifyContent: 'center', gap: 8 },
+  deleteBtnText: { color: '#e05c3a', fontSize: 14, fontWeight: '700' },
 });

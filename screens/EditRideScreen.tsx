@@ -26,6 +26,9 @@ const MOIS = [
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
 ];
 
+// ─── Helper : détermine si le sport est vélo ──────────────────────────────────
+const isVelo = (sport: string) => sport === 'route' || sport === 'vtt';
+
 type Sortie = {
   id: string; titre: string; sport: string; distance: string;
   elevation: string; allure: string; lieu: string; lieu_rencontre: string;
@@ -207,6 +210,14 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ─── Reset allure si on change de catégorie de sport ───────────────────────
+  const handleSportChange = (sportId: string) => {
+    const wasVelo = isVelo(sport);
+    const willBeVelo = isVelo(sportId);
+    if (wasVelo !== willBeVelo) setAllure('');
+    setSport(sportId);
+  };
+
   const searchLocation = async (text: string) => {
     setLieu(text); setLocationCoords(null);
     if (text.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
@@ -259,6 +270,11 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
     return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   };
 
+  // ─── Allure : config dynamique selon le sport ───────────────────────────────
+  const paceConfig = isVelo(sport)
+    ? { label: 'Vitesse', unit: 'km/h', placeholder: 'ex: 28' }
+    : { label: 'Allure', unit: 'min/km', placeholder: 'ex: 6:30' };
+
   return (
     <SwipeBack onSwipeBack={onBack}>
       <View style={styles.container}>
@@ -279,7 +295,7 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
             <Text style={styles.label}>Sport</Text>
             <View style={styles.sportGrid}>
               {SPORTS.map(s => (
-                <TouchableOpacity key={s.id} style={[styles.sportBtn, sport === s.id && styles.sportBtnActive]} onPress={() => setSport(s.id)}>
+                <TouchableOpacity key={s.id} style={[styles.sportBtn, sport === s.id && styles.sportBtnActive]} onPress={() => handleSportChange(s.id)}>
                   <Text style={styles.sportEmoji}>{s.emoji}</Text>
                   <Text style={[styles.sportLabel, sport === s.id && styles.sportLabelActive]}>{s.label}</Text>
                 </TouchableOpacity>
@@ -298,10 +314,23 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
             </View>
           </View>
 
+          {/* ─── Allure / Vitesse dynamique ─────────────────────────────────── */}
           <View style={styles.row}>
             <View style={[styles.fieldGroup, { flex: 1 }]}>
-              <Text style={styles.label}>Allure</Text>
-              <TextInput style={styles.input} value={allure} onChangeText={setAllure} placeholder="ex: 28km/h" placeholderTextColor="#bbbbdd" />
+              <Text style={styles.label}>{paceConfig.label}</Text>
+              <View style={styles.paceRow}>
+                <TextInput
+                  style={[styles.input, styles.paceInput]}
+                  value={allure}
+                  onChangeText={setAllure}
+                  keyboardType={isVelo(sport) ? 'numeric' : 'default'}
+                  placeholder={paceConfig.placeholder}
+                  placeholderTextColor="#bbbbdd"
+                />
+                <View style={styles.paceBadge}>
+                  <Text style={styles.paceBadgeText}>{paceConfig.unit}</Text>
+                </View>
+              </View>
             </View>
             <View style={[styles.fieldGroup, { flex: 1 }]}>
               <Text style={styles.label}>Participants max</Text>
@@ -432,6 +461,12 @@ const styles = StyleSheet.create({
   niveauxRow: { flexDirection: 'row', gap: 8 },
   niveauBtn: { flex: 1, padding: 9, borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff', alignItems: 'center' },
   niveauText: { fontSize: 11, fontWeight: '600', color: '#8888bb' },
+  // ─── Allure avec badge unité ──────────────────────────────────────────────
+  paceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  paceInput: { flex: 1 },
+  paceBadge: { backgroundColor: '#EEEDFE', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 9, borderWidth: 1.5, borderColor: '#DDD8FF' },
+  paceBadgeText: { fontSize: 12, fontWeight: '700', color: '#5B52F0' },
+  // ─────────────────────────────────────────────────────────────────────────
   suggestionsBox: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', marginTop: 4, overflow: 'hidden', shadowColor: '#5B52F0', shadowOpacity: 0.08, shadowRadius: 8, elevation: 4 },
   suggestionItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
   suggestionBorder: { borderBottomWidth: 1, borderBottomColor: '#F4F3FF' },

@@ -4,6 +4,7 @@ import {
   StyleSheet, Alert, KeyboardAvoidingView, Platform, Modal
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import MapView, { Marker, Region } from 'react-native-maps';
 import { supabase } from '../lib/supabase';
 
 const SPORTS = [
@@ -25,25 +26,19 @@ const MOIS = [
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
 ];
 
+const isVelo = (sport: string) => sport === 'route' || sport === 'vtt';
+
 type Suggestion = {
   display_name: string;
   lat: string;
   lon: string;
   address: {
-    amenity?: string;
-    tourism?: string;
-    leisure?: string;
-    neighbourhood?: string;
-    suburb?: string;
-    quarter?: string;
-    road?: string;
-    city_district?: string;
-    city?: string;
-    town?: string;
-    village?: string;
-    municipality?: string;
-    county?: string;
-    state?: string;
+    house_number?: string;
+    amenity?: string; tourism?: string; leisure?: string;
+    neighbourhood?: string; suburb?: string; quarter?: string;
+    road?: string; city_district?: string;
+    city?: string; town?: string; village?: string;
+    municipality?: string; county?: string; state?: string;
   };
 };
 
@@ -106,7 +101,7 @@ function MiniCalendar({ selectedDate, onSelect }: { selectedDate: string; onSele
   );
 }
 
-// ─── Sélecteur d'heure (roulette native) ─────────────────────────────────────
+// ─── Sélecteur d'heure ────────────────────────────────────────────────────────
 
 function TimePicker({ time, onConfirm }: { time: string; onConfirm: (time: string) => void; }) {
   const strToDate = (t: string): Date => {
@@ -143,7 +138,6 @@ function TimePicker({ time, onConfirm }: { time: string; onConfirm: (time: strin
         <Text style={styles.dateBtnChevron}>▼</Text>
       </TouchableOpacity>
 
-      {/* iOS : modal avec roulette + Confirmer */}
       {Platform.OS === 'ios' && (
         <Modal visible={showPicker} transparent animationType="slide">
           <TouchableOpacity style={tp.overlay} activeOpacity={1} onPress={() => setShowPicker(false)} />
@@ -157,21 +151,11 @@ function TimePicker({ time, onConfirm }: { time: string; onConfirm: (time: strin
                 <Text style={tp.confirmText}>Confirmer</Text>
               </TouchableOpacity>
             </View>
-            <DateTimePicker
-              value={tempDate}
-              mode="time"
-              display="spinner"
-              onChange={handleChange}
-              locale="fr-FR"
-              minuteInterval={5}
-              themeVariant="light"
-              style={{ height: 180, backgroundColor: '#fff' }}
-            />
+            <DateTimePicker value={tempDate} mode="time" display="spinner" onChange={handleChange} locale="fr-FR" minuteInterval={5} themeVariant="light" style={{ height: 180, backgroundColor: '#fff' }} />
           </View>
         </Modal>
       )}
 
-      {/* Android : popup natif */}
       {Platform.OS === 'android' && showPicker && (
         <DateTimePicker value={tempDate} mode="time" display="default" onChange={handleChange} minuteInterval={5} />
       )}
@@ -194,20 +178,33 @@ export default function CreateScreen() {
   const [time, setTime] = useState('');
   const [location, setLocation] = useState('');
   const [locationCoords, setLocationCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [markerCoords, setMarkerCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [mapRegion, setMapRegion] = useState<Region | null>(null);
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapRef = useRef<MapView>(null);
+
+  const handleSportChange = (sportId: string) => {
+    const wasVelo = isVelo(selectedSport);
+    const willBeVelo = isVelo(sportId);
+    if (wasVelo !== willBeVelo) setPace('');
+    setSelectedSport(sportId);
+  };
 
   const searchLocation = async (text: string) => {
-    setLocation(text); setLocationCoords(null);
+    setLocation(text);
+    setLocationCoords(null);
+    setMarkerCoords(null);
+    setMapRegion(null);
     if (text.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(async () => {
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=8&addressdetails=1&countrycodes=fr`,
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=10&addressdetails=1&countrycodes=fr`,
           { headers: { 'User-Agent': 'MakkerApp/1.0' } }
         );
         setSuggestions(await response.json()); setShowSuggestions(true);
@@ -215,26 +212,44 @@ export default function CreateScreen() {
     }, 400);
   };
 
+  // ─── buildLabel : affiche rue + numéro + ville si dispo ──────────────────
   const buildLabel = (s: Suggestion): string => {
     const addr = s.address;
-    const lieu = addr.amenity || addr.tourism || addr.leisure || addr.neighbourhood || addr.suburb || addr.quarter || addr.road || '';
+    const poi = addr.amenity || addr.tourism || addr.leisure || '';
+    const road = addr.road || '';
+    const number = addr.house_number || '';
     const ville = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
-    if (lieu && ville) return `${lieu}, ${ville}`;
+
+    if (poi && ville) return `${poi}, ${ville}`;
+    if (road && number && ville) return `${number} ${road}, ${ville}`;
+    if (road && ville) return `${road}, ${ville}`;
     if (ville) return ville;
     return s.display_name.split(',').slice(0, 3).join(',').trim();
   };
 
   const selectSuggestion = (suggestion: Suggestion) => {
+    const lat = parseFloat(suggestion.lat);
+    const lon = parseFloat(suggestion.lon);
     setLocation(buildLabel(suggestion));
-    setLocationCoords({ latitude: parseFloat(suggestion.lat), longitude: parseFloat(suggestion.lon) });
+    setLocationCoords({ latitude: lat, longitude: lon });
+    setMarkerCoords({ latitude: lat, longitude: lon });
+    setMapRegion({ latitude: lat, longitude: lon, latitudeDelta: 0.008, longitudeDelta: 0.008 });
     setSuggestions([]); setShowSuggestions(false);
+  };
+
+  // Tap sur la carte = déplace le marqueur
+  const handleMapPress = (e: any) => {
+    const { latitude, longitude } = e.nativeEvent.coordinate;
+    setMarkerCoords({ latitude, longitude });
+    setLocationCoords({ latitude, longitude });
   };
 
   const resetForm = () => {
     setTitle(''); setDistance(''); setElevation(''); setPace('');
     setDate(''); setTime(''); setLocation(''); setLocationCoords(null);
-    setDescription(''); setSelectedSport('route');
-    setSelectedLevel('intermediaire'); setParticipants(8); setShowCalendar(false);
+    setMarkerCoords(null); setMapRegion(null); setDescription('');
+    setSelectedSport('route'); setSelectedLevel('intermediaire');
+    setParticipants(8); setShowCalendar(false);
   };
 
   const handlePublish = async () => {
@@ -243,7 +258,7 @@ export default function CreateScreen() {
       return;
     }
     if (!locationCoords) {
-      Alert.alert('Lieu non confirmé', 'Merci de sélectionner une ville dans la liste de suggestions.');
+      Alert.alert('Lieu non confirmé', 'Merci de sélectionner un lieu dans la liste de suggestions.');
       return;
     }
     setLoading(true);
@@ -269,6 +284,10 @@ export default function CreateScreen() {
     return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   };
 
+  const paceConfig = isVelo(selectedSport)
+    ? { label: 'Vitesse', unit: 'km/h', placeholder: 'ex: 28' }
+    : { label: 'Allure', unit: '/km', placeholder: 'ex: 6:30' };
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
       <View style={styles.container}>
@@ -288,7 +307,7 @@ export default function CreateScreen() {
             <Text style={styles.label}>Sport</Text>
             <View style={styles.sportGrid}>
               {SPORTS.map(s => (
-                <TouchableOpacity key={s.id} style={[styles.sportBtn, selectedSport === s.id && styles.sportBtnActive]} onPress={() => setSelectedSport(s.id)}>
+                <TouchableOpacity key={s.id} style={[styles.sportBtn, selectedSport === s.id && styles.sportBtnActive]} onPress={() => handleSportChange(s.id)}>
                   <Text style={styles.sportEmoji}>{s.emoji}</Text>
                   <Text style={[styles.sportLabel, selectedSport === s.id && styles.sportLabelActive]}>{s.label}</Text>
                 </TouchableOpacity>
@@ -296,7 +315,6 @@ export default function CreateScreen() {
             </View>
           </View>
 
-          {/* Date + Heure */}
           <View style={styles.row}>
             <View style={[styles.fieldGroup, { flex: 2 }]}>
               <Text style={styles.label}>Date{date ? <Text style={styles.confirmed}> ✓</Text> : ''}</Text>
@@ -306,7 +324,6 @@ export default function CreateScreen() {
               </TouchableOpacity>
               {showCalendar && <MiniCalendar selectedDate={date} onSelect={(d) => { setDate(d); setShowCalendar(false); }} />}
             </View>
-
             <View style={[styles.fieldGroup, { flex: 1 }]}>
               <Text style={styles.label}>Heure{time ? <Text style={styles.confirmed}> ✓</Text> : ''}</Text>
               <TimePicker time={time} onConfirm={setTime} />
@@ -325,8 +342,20 @@ export default function CreateScreen() {
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Allure / Vitesse</Text>
-            <TextInput style={styles.input} placeholder="ex: 28 km/h ou 6:30 /km" placeholderTextColor="#bbbbdd" value={pace} onChangeText={setPace} />
+            <Text style={styles.label}>{paceConfig.label}</Text>
+            <View style={styles.paceRow}>
+              <TextInput
+                style={[styles.input, styles.paceInput]}
+                placeholder={paceConfig.placeholder}
+                placeholderTextColor="#bbbbdd"
+                keyboardType={isVelo(selectedSport) ? 'numeric' : 'default'}
+                value={pace}
+                onChangeText={setPace}
+              />
+              <View style={styles.paceBadge}>
+                <Text style={styles.paceBadgeText}>{paceConfig.unit}</Text>
+              </View>
+            </View>
           </View>
 
           <View style={styles.fieldGroup}>
@@ -349,9 +378,22 @@ export default function CreateScreen() {
             </View>
           </View>
 
+          {/* ─── Point de rendez-vous + mini carte ────────────────────────── */}
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Ville / Lieu de départ{locationCoords && <Text style={styles.confirmed}> ✓ Confirmé</Text>}</Text>
-            <TextInput style={[styles.input, locationCoords && styles.inputConfirmed]} placeholder="ex: Lyon, Col de l'Oeillon..." placeholderTextColor="#bbbbdd" value={location} onChangeText={searchLocation} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} />
+            <Text style={styles.label}>
+              Point de rendez-vous
+              {markerCoords ? <Text style={styles.confirmed}> ✓ Confirmé</Text> : ''}
+            </Text>
+            <TextInput
+              style={[styles.input, markerCoords && styles.inputConfirmed]}
+              placeholder="Recherche une rue, un lieu, une ville..."
+              placeholderTextColor="#bbbbdd"
+              value={location}
+              onChangeText={searchLocation}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            />
+
+            {/* Suggestions Nominatim */}
             {showSuggestions && suggestions.length > 0 && (
               <View style={styles.suggestionsBox}>
                 {suggestions.map((s, i) => (
@@ -360,6 +402,30 @@ export default function CreateScreen() {
                     <Text style={styles.suggestionText}>{buildLabel(s)}</Text>
                   </TouchableOpacity>
                 ))}
+              </View>
+            )}
+
+            {/* Mini carte — tap pour déplacer le marqueur */}
+            {mapRegion && markerCoords && (
+              <View style={styles.miniMapWrapper}>
+                <MapView
+                  ref={mapRef}
+                  style={styles.miniMap}
+                  initialRegion={mapRegion}
+                  scrollEnabled={true}
+                  zoomEnabled={true}
+                  rotateEnabled={false}
+                  pitchEnabled={false}
+                  onPress={handleMapPress}
+                >
+                  <Marker
+                    coordinate={markerCoords}
+                    pinColor="#5B52F0"
+                  />
+                </MapView>
+                <View style={styles.miniMapHint}>
+                  <Text style={styles.miniMapHintText}>📌 Appuie sur la carte pour déplacer le point</Text>
+                </View>
               </View>
             )}
           </View>
@@ -402,7 +468,7 @@ const cal = StyleSheet.create({
   weekRow: { flexDirection: 'row', marginBottom: 6 },
   weekDay: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: '#8888bb' },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  cell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  cell: { width: '14.28%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
   todayCell: { borderWidth: 1.5, borderColor: '#5B52F0' },
   selectedCell: { backgroundColor: '#5B52F0', borderRadius: 8 },
   pastCell: { opacity: 0.3 },
@@ -444,11 +510,21 @@ const styles = StyleSheet.create({
   pBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#EEEDFE', borderWidth: 1, borderColor: '#DDD8FF', alignItems: 'center', justifyContent: 'center' },
   pBtnText: { fontSize: 18, color: '#5B52F0', lineHeight: 22 },
   pVal: { fontSize: 18, fontWeight: '600', color: '#1a1a2e' },
+  paceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  paceInput: { flex: 1 },
+  paceBadge: { backgroundColor: '#EEEDFE', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 9, borderWidth: 1.5, borderColor: '#DDD8FF' },
+  paceBadgeText: { fontSize: 12, fontWeight: '700', color: '#5B52F0' },
   suggestionsBox: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', marginTop: 4, overflow: 'hidden', shadowColor: '#5B52F0', shadowOpacity: 0.08, shadowRadius: 8, elevation: 4 },
   suggestionItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
   suggestionBorder: { borderBottomWidth: 1, borderBottomColor: '#F4F3FF' },
   suggestionIcon: { fontSize: 14 },
   suggestionText: { fontSize: 13, color: '#1a1a2e', flex: 1 },
+  // ─── Mini carte ────────────────────────────────────────────────────────────
+  miniMapWrapper: { marginTop: 8, borderRadius: 14, overflow: 'hidden', borderWidth: 1.5, borderColor: '#DDD8FF' },
+  miniMap: { height: 220, width: '100%' },
+  miniMapHint: { backgroundColor: '#EEEDFE', paddingVertical: 8, paddingHorizontal: 12 },
+  miniMapHintText: { fontSize: 12, color: '#5B52F0', fontWeight: '500', textAlign: 'center' },
+  // ──────────────────────────────────────────────────────────────────────────
   publishBtn: { backgroundColor: '#5B52F0', borderRadius: 12, padding: 15, alignItems: 'center', marginTop: 8 },
   publishText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
