@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  TextInput, StyleSheet, Alert, Platform, Modal
+  TextInput, StyleSheet, Alert, Platform, Modal, KeyboardAvoidingView
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import MapView, { Marker, Region } from 'react-native-maps';
 import { supabase } from '../lib/supabase';
 import SwipeBack from '../components/SwipeBack';
 
@@ -26,7 +27,6 @@ const MOIS = [
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
 ];
 
-// ─── Helper : détermine si le sport est vélo ──────────────────────────────────
 const isVelo = (sport: string) => sport === 'route' || sport === 'vtt';
 
 type Sortie = {
@@ -40,6 +40,7 @@ type Sortie = {
 type Suggestion = {
   display_name: string; lat: string; lon: string;
   address: {
+    house_number?: string;
     amenity?: string; tourism?: string; leisure?: string;
     neighbourhood?: string; suburb?: string; quarter?: string;
     road?: string; city_district?: string;
@@ -115,7 +116,7 @@ function MiniCalendar({ selectedDate, onSelect }: { selectedDate: string; onSele
   );
 }
 
-// ─── Sélecteur d'heure (roulette native) ─────────────────────────────────────
+// ─── Sélecteur d'heure ────────────────────────────────────────────────────────
 
 function TimePicker({ time, onConfirm }: { time: string; onConfirm: (time: string) => void; }) {
   const strToDate = (t: string): Date => {
@@ -165,16 +166,7 @@ function TimePicker({ time, onConfirm }: { time: string; onConfirm: (time: strin
                 <Text style={tp.confirmText}>Confirmer</Text>
               </TouchableOpacity>
             </View>
-            <DateTimePicker
-              value={tempDate}
-              mode="time"
-              display="spinner"
-              onChange={handleChange}
-              locale="fr-FR"
-              minuteInterval={5}
-              themeVariant="light"
-              style={{ height: 180, backgroundColor: '#fff' }}
-            />
+            <DateTimePicker value={tempDate} mode="time" display="spinner" onChange={handleChange} locale="fr-FR" minuteInterval={5} themeVariant="light" style={{ height: 180, backgroundColor: '#fff' }} />
           </View>
         </Modal>
       )}
@@ -198,19 +190,24 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
   const [locationCoords, setLocationCoords] = useState<{ latitude: number; longitude: number } | null>(
     sortie.latitude ? { latitude: sortie.latitude, longitude: sortie.longitude! } : null
   );
-  const [lieuRencontre, setLieuRencontre] = useState(sortie.lieu_rencontre || '');
+  const [markerCoords, setMarkerCoords] = useState<{ latitude: number; longitude: number } | null>(
+    sortie.latitude ? { latitude: sortie.latitude, longitude: sortie.longitude! } : null
+  );
+  const [mapRegion, setMapRegion] = useState<Region | null>(
+    sortie.latitude ? { latitude: sortie.latitude, longitude: sortie.longitude!, latitudeDelta: 0.008, longitudeDelta: 0.008 } : null
+  );
   const [date, setDate] = useState(sortie.date_sortie);
   const [showCalendar, setShowCalendar] = useState(false);
   const [heure, setHeure] = useState(sortie.heure);
-  const [participantsMax, setParticipantsMax] = useState(String(sortie.participants_max));
+  const [participants, setParticipants] = useState(sortie.participants_max || 8);
   const [niveau, setNiveau] = useState(sortie.niveau);
   const [description, setDescription] = useState(sortie.description || '');
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mapRef = useRef<MapView>(null);
 
-  // ─── Reset allure si on change de catégorie de sport ───────────────────────
   const handleSportChange = (sportId: string) => {
     const wasVelo = isVelo(sport);
     const willBeVelo = isVelo(sportId);
@@ -219,13 +216,16 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
   };
 
   const searchLocation = async (text: string) => {
-    setLieu(text); setLocationCoords(null);
+    setLieu(text);
+    setLocationCoords(null);
+    setMarkerCoords(null);
+    setMapRegion(null);
     if (text.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(async () => {
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=8&addressdetails=1&countrycodes=fr`,
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=10&addressdetails=1&countrycodes=fr`,
           { headers: { 'User-Agent': 'MakkerApp/1.0' } }
         );
         setSuggestions(await response.json()); setShowSuggestions(true);
@@ -235,26 +235,43 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
 
   const buildLabel = (s: Suggestion): string => {
     const addr = s.address;
-    const lieu = addr.amenity || addr.tourism || addr.leisure || addr.neighbourhood || addr.suburb || addr.quarter || addr.road || '';
+    const poi = addr.amenity || addr.tourism || addr.leisure || '';
+    const road = addr.road || '';
+    const number = addr.house_number || '';
     const ville = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
-    if (lieu && ville) return `${lieu}, ${ville}`;
+    if (poi && ville) return `${poi}, ${ville}`;
+    if (road && number && ville) return `${number} ${road}, ${ville}`;
+    if (road && ville) return `${road}, ${ville}`;
     if (ville) return ville;
     return s.display_name.split(',').slice(0, 3).join(',').trim();
   };
 
   const selectSuggestion = (s: Suggestion) => {
+    const lat = parseFloat(s.lat);
+    const lon = parseFloat(s.lon);
     setLieu(buildLabel(s));
-    setLocationCoords({ latitude: parseFloat(s.lat), longitude: parseFloat(s.lon) });
+    setLocationCoords({ latitude: lat, longitude: lon });
+    setMarkerCoords({ latitude: lat, longitude: lon });
+    setMapRegion({ latitude: lat, longitude: lon, latitudeDelta: 0.008, longitudeDelta: 0.008 });
     setSuggestions([]); setShowSuggestions(false);
   };
 
+  const handleMapPress = (e: any) => {
+    const { latitude, longitude } = e.nativeEvent.coordinate;
+    setMarkerCoords({ latitude, longitude });
+    setLocationCoords({ latitude, longitude });
+  };
+
   const handleSave = async () => {
-    if (!titre || !lieu || !date || !heure) { Alert.alert('Erreur', "Remplis au moins le titre, le lieu, la date et l'heure."); return; }
+    if (!titre || !lieu || !date || !heure) {
+      Alert.alert('Erreur', "Remplis au moins le titre, le lieu, la date et l'heure.");
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.from('sorties').update({
       titre, sport, distance, elevation, allure,
-      lieu, lieu_rencontre: lieuRencontre, date_sortie: date, heure,
-      participants_max: parseInt(participantsMax) || 5, niveau, description,
+      lieu, lieu_rencontre: lieu, date_sortie: date, heure,
+      participants_max: participants, niveau, description,
       ...(locationCoords && { latitude: locationCoords.latitude, longitude: locationCoords.longitude }),
     }).eq('id', sortie.id);
     setLoading(false);
@@ -270,53 +287,66 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
     return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   };
 
-  // ─── Allure : config dynamique selon le sport ───────────────────────────────
   const paceConfig = isVelo(sport)
     ? { label: 'Vitesse', unit: 'km/h', placeholder: 'ex: 28' }
-    : { label: 'Allure', unit: 'min/km', placeholder: 'ex: 6:30' };
+    : { label: 'Allure', unit: '/km', placeholder: 'ex: 6:30' };
 
   return (
     <SwipeBack onSwipeBack={onBack}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={onBack}><Text style={styles.backArrow}>←</Text></TouchableOpacity>
-          <Text style={styles.headerTitle}>Modifier la sortie</Text>
-          <View style={{ width: 36 }} />
-        </View>
-
-        <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Titre de la sortie *</Text>
-            <TextInput style={styles.input} value={titre} onChangeText={setTitre} placeholder="ex: Sortie matinale Croix-Rousse" placeholderTextColor="#bbbbdd" />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={0}>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backBtn} onPress={onBack}><Text style={styles.backArrow}>←</Text></TouchableOpacity>
+            <Text style={styles.headerTitle}>Modifier la sortie</Text>
+            <View style={{ width: 36 }} />
           </View>
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Sport</Text>
-            <View style={styles.sportGrid}>
-              {SPORTS.map(s => (
-                <TouchableOpacity key={s.id} style={[styles.sportBtn, sport === s.id && styles.sportBtnActive]} onPress={() => handleSportChange(s.id)}>
-                  <Text style={styles.sportEmoji}>{s.emoji}</Text>
-                  <Text style={[styles.sportLabel, sport === s.id && styles.sportLabelActive]}>{s.label}</Text>
+          <ScrollView style={styles.form} contentContainerStyle={{ padding: 16, gap: 16 }} keyboardShouldPersistTaps="handled">
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Titre de la sortie</Text>
+              <TextInput style={styles.input} value={titre} onChangeText={setTitre} placeholder="ex: Sortie matinale Croix-Rousse" placeholderTextColor="#bbbbdd" />
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Sport</Text>
+              <View style={styles.sportGrid}>
+                {SPORTS.map(s => (
+                  <TouchableOpacity key={s.id} style={[styles.sportBtn, sport === s.id && styles.sportBtnActive]} onPress={() => handleSportChange(s.id)}>
+                    <Text style={styles.sportEmoji}>{s.emoji}</Text>
+                    <Text style={[styles.sportLabel, sport === s.id && styles.sportLabelActive]}>{s.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.row}>
+              <View style={[styles.fieldGroup, { flex: 2 }]}>
+                <Text style={styles.label}>Date{date ? <Text style={styles.confirmed}> ✓</Text> : ''}</Text>
+                <TouchableOpacity style={[styles.input, styles.dateBtn, date && styles.inputConfirmed]} onPress={() => setShowCalendar(v => !v)} activeOpacity={0.8}>
+                  <Text style={[styles.dateBtnText, !date && { color: '#bbbbdd' }]}>📅  {dateBtnLabel()}</Text>
+                  <Text style={styles.dateBtnChevron}>{showCalendar ? '▲' : '▼'}</Text>
                 </TouchableOpacity>
-              ))}
+                {showCalendar && <MiniCalendar selectedDate={date} onSelect={(d) => { setDate(d); setShowCalendar(false); }} />}
+              </View>
+              <View style={[styles.fieldGroup, { flex: 1 }]}>
+                <Text style={styles.label}>Heure{heure ? <Text style={styles.confirmed}> ✓</Text> : ''}</Text>
+                <TimePicker time={heure} onConfirm={setHeure} />
+              </View>
             </View>
-          </View>
 
-          <View style={styles.row}>
-            <View style={[styles.fieldGroup, { flex: 1 }]}>
-              <Text style={styles.label}>Distance (km)</Text>
-              <TextInput style={styles.input} value={distance} onChangeText={setDistance} keyboardType="numeric" placeholder="ex: 45" placeholderTextColor="#bbbbdd" />
+            <View style={styles.row}>
+              <View style={[styles.fieldGroup, { flex: 1 }]}>
+                <Text style={styles.label}>Distance (km)</Text>
+                <TextInput style={styles.input} value={distance} onChangeText={setDistance} keyboardType="numeric" placeholder="45" placeholderTextColor="#bbbbdd" />
+              </View>
+              <View style={[styles.fieldGroup, { flex: 1 }]}>
+                <Text style={styles.label}>Dénivelé (m)</Text>
+                <TextInput style={styles.input} value={elevation} onChangeText={setElevation} keyboardType="numeric" placeholder="680" placeholderTextColor="#bbbbdd" />
+              </View>
             </View>
-            <View style={[styles.fieldGroup, { flex: 1 }]}>
-              <Text style={styles.label}>Dénivelé (m)</Text>
-              <TextInput style={styles.input} value={elevation} onChangeText={setElevation} keyboardType="numeric" placeholder="ex: 600" placeholderTextColor="#bbbbdd" />
-            </View>
-          </View>
 
-          {/* ─── Allure / Vitesse dynamique ─────────────────────────────────── */}
-          <View style={styles.row}>
-            <View style={[styles.fieldGroup, { flex: 1 }]}>
+            <View style={styles.fieldGroup}>
               <Text style={styles.label}>{paceConfig.label}</Text>
               <View style={styles.paceRow}>
                 <TextInput
@@ -332,72 +362,87 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
                 </View>
               </View>
             </View>
-            <View style={[styles.fieldGroup, { flex: 1 }]}>
-              <Text style={styles.label}>Participants max</Text>
-              <TextInput style={styles.input} value={participantsMax} onChangeText={setParticipantsMax} keyboardType="numeric" placeholder="ex: 8" placeholderTextColor="#bbbbdd" />
-            </View>
-          </View>
 
-          {/* Date + Heure */}
-          <View style={styles.row}>
-            <View style={[styles.fieldGroup, { flex: 2 }]}>
-              <Text style={styles.label}>Date *{date ? <Text style={styles.confirmed}> ✓</Text> : ''}</Text>
-              <TouchableOpacity style={[styles.input, styles.dateBtn, date && styles.inputConfirmed]} onPress={() => setShowCalendar(v => !v)} activeOpacity={0.8}>
-                <Text style={[styles.dateBtnText, !date && { color: '#bbbbdd' }]}>📅  {dateBtnLabel()}</Text>
-                <Text style={styles.dateBtnChevron}>{showCalendar ? '▲' : '▼'}</Text>
-              </TouchableOpacity>
-              {showCalendar && (
-                <MiniCalendar selectedDate={date} onSelect={(d) => { setDate(d); setShowCalendar(false); }} />
-              )}
-            </View>
-            <View style={[styles.fieldGroup, { flex: 1 }]}>
-              <Text style={styles.label}>Heure *{heure ? <Text style={styles.confirmed}> ✓</Text> : ''}</Text>
-              <TimePicker time={heure} onConfirm={setHeure} />
-            </View>
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Lieu *{locationCoords && <Text style={styles.confirmed}> ✓ Confirmé</Text>}</Text>
-            <TextInput style={[styles.input, locationCoords && styles.inputConfirmed]} value={lieu} onChangeText={searchLocation} placeholder="ex: Lyon, Col de l'Oeillon..." placeholderTextColor="#bbbbdd" onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} />
-            {showSuggestions && suggestions.length > 0 && (
-              <View style={styles.suggestionsBox}>
-                {suggestions.map((s, i) => (
-                  <TouchableOpacity key={i} style={[styles.suggestionItem, i < suggestions.length - 1 && styles.suggestionBorder]} onPress={() => selectSuggestion(s)}>
-                    <Text style={styles.suggestionIcon}>📍</Text>
-                    <Text style={styles.suggestionText}>{buildLabel(s)}</Text>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Niveau</Text>
+              <View style={styles.niveauxRow}>
+                {NIVEAUX.map(n => (
+                  <TouchableOpacity key={n.id} style={[styles.niveauBtn, niveau === n.id && { borderColor: n.color, backgroundColor: n.color + '15' }]} onPress={() => setNiveau(n.id)}>
+                    <Text style={[styles.niveauText, niveau === n.id && { color: n.color }]}>{n.label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-            )}
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Point de rencontre</Text>
-            <TextInput style={styles.input} value={lieuRencontre} onChangeText={setLieuRencontre} placeholder="ex: Place de la Croix-Rousse" placeholderTextColor="#bbbbdd" />
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Niveau</Text>
-            <View style={styles.niveauxRow}>
-              {NIVEAUX.map(n => (
-                <TouchableOpacity key={n.id} style={[styles.niveauBtn, niveau === n.id && { borderColor: n.color, backgroundColor: n.color + '15' }]} onPress={() => setNiveau(n.id)}>
-                  <Text style={[styles.niveauText, niveau === n.id && { color: n.color }]}>{n.label}</Text>
-                </TouchableOpacity>
-              ))}
             </View>
-          </View>
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Description</Text>
-            <TextInput style={[styles.input, styles.textArea]} value={description} onChangeText={setDescription} placeholder="Décris ta sortie..." placeholderTextColor="#bbbbdd" multiline numberOfLines={4} />
-          </View>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Participants max</Text>
+              <View style={styles.participantsRow}>
+                <TouchableOpacity style={styles.pBtn} onPress={() => setParticipants(Math.max(2, participants - 1))}><Text style={styles.pBtnText}>−</Text></TouchableOpacity>
+                <Text style={styles.pVal}>{participants}</Text>
+                <TouchableOpacity style={styles.pBtn} onPress={() => setParticipants(Math.min(20, participants + 1))}><Text style={styles.pBtnText}>+</Text></TouchableOpacity>
+              </View>
+            </View>
 
-          <TouchableOpacity style={[styles.saveBtn, loading && { opacity: 0.7 }]} onPress={handleSave} disabled={loading}>
-            <Text style={styles.saveBtnText}>{loading ? 'Enregistrement...' : 'Enregistrer les modifications'}</Text>
-          </TouchableOpacity>
+            {/* ─── Point de rendez-vous + mini carte ──────────────────── */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>
+                Point de rendez-vous
+                {markerCoords ? <Text style={styles.confirmed}> ✓ Confirmé</Text> : ''}
+              </Text>
+              <TextInput
+                style={[styles.input, markerCoords && styles.inputConfirmed]}
+                placeholder="Recherche une rue, un lieu, une ville..."
+                placeholderTextColor="#bbbbdd"
+                value={lieu}
+                onChangeText={searchLocation}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+              />
 
-        </ScrollView>
-      </View>
+              {showSuggestions && suggestions.length > 0 && (
+                <View style={styles.suggestionsBox}>
+                  {suggestions.map((s, i) => (
+                    <TouchableOpacity key={i} style={[styles.suggestionItem, i < suggestions.length - 1 && styles.suggestionBorder]} onPress={() => selectSuggestion(s)}>
+                      <Text style={styles.suggestionIcon}>📍</Text>
+                      <Text style={styles.suggestionText}>{buildLabel(s)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {mapRegion && markerCoords && (
+                <View style={styles.miniMapWrapper}>
+                  <MapView
+                    ref={mapRef}
+                    style={styles.miniMap}
+                    initialRegion={mapRegion}
+                    scrollEnabled={true}
+                    zoomEnabled={true}
+                    rotateEnabled={false}
+                    pitchEnabled={false}
+                    onPress={handleMapPress}
+                  >
+                    <Marker coordinate={markerCoords} pinColor="#5B52F0" />
+                  </MapView>
+                  <View style={styles.miniMapHint}>
+                    <Text style={styles.miniMapHintText}>📌 Appuie sur la carte pour déplacer le point</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Description <Text style={styles.optional}>(optionnel)</Text></Text>
+              <TextInput style={[styles.input, styles.textarea]} value={description} onChangeText={setDescription} placeholder="Décris la sortie, conseils, matériel..." placeholderTextColor="#bbbbdd" multiline numberOfLines={3} />
+            </View>
+
+            <TouchableOpacity style={[styles.saveBtn, loading && { opacity: 0.7 }]} onPress={handleSave} disabled={loading}>
+              <Text style={styles.saveBtnText}>{loading ? 'Enregistrement...' : 'Enregistrer les modifications'}</Text>
+            </TouchableOpacity>
+
+            <View style={{ height: 20 }} />
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
     </SwipeBack>
   );
 }
@@ -424,7 +469,7 @@ const cal = StyleSheet.create({
   weekRow: { flexDirection: 'row', marginBottom: 6 },
   weekDay: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: '#8888bb' },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  cell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  cell: { width: '14.28%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
   todayCell: { borderWidth: 1.5, borderColor: '#5B52F0' },
   selectedCell: { backgroundColor: '#5B52F0', borderRadius: 8 },
   pastCell: { opacity: 0.3 },
@@ -442,12 +487,14 @@ const styles = StyleSheet.create({
   backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#EEEDFE', alignItems: 'center', justifyContent: 'center' },
   backArrow: { fontSize: 18, color: '#5B52F0' },
   headerTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a2e' },
+  form: { flex: 1 },
   fieldGroup: { gap: 6 },
   label: { fontSize: 12, fontWeight: '600', color: '#8888bb' },
+  optional: { fontSize: 12, fontWeight: '400', color: '#bbbbdd' },
   confirmed: { fontSize: 12, fontWeight: '600', color: '#22c55e' },
   input: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', padding: 11, fontSize: 13, color: '#1a1a2e' },
   inputConfirmed: { borderColor: '#22c55e', backgroundColor: '#f0fdf4' },
-  textArea: { height: 100, textAlignVertical: 'top' },
+  textarea: { height: 80, textAlignVertical: 'top' },
   row: { flexDirection: 'row', gap: 10 },
   dateBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, paddingHorizontal: 11 },
   dateBtnText: { fontSize: 13, color: '#1a1a2e', flex: 1 },
@@ -461,17 +508,23 @@ const styles = StyleSheet.create({
   niveauxRow: { flexDirection: 'row', gap: 8 },
   niveauBtn: { flex: 1, padding: 9, borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff', alignItems: 'center' },
   niveauText: { fontSize: 11, fontWeight: '600', color: '#8888bb' },
-  // ─── Allure avec badge unité ──────────────────────────────────────────────
+  participantsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', padding: 10 },
+  pBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#EEEDFE', borderWidth: 1, borderColor: '#DDD8FF', alignItems: 'center', justifyContent: 'center' },
+  pBtnText: { fontSize: 18, color: '#5B52F0', lineHeight: 22 },
+  pVal: { fontSize: 18, fontWeight: '600', color: '#1a1a2e' },
   paceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   paceInput: { flex: 1 },
   paceBadge: { backgroundColor: '#EEEDFE', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 9, borderWidth: 1.5, borderColor: '#DDD8FF' },
   paceBadgeText: { fontSize: 12, fontWeight: '700', color: '#5B52F0' },
-  // ─────────────────────────────────────────────────────────────────────────
   suggestionsBox: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', marginTop: 4, overflow: 'hidden', shadowColor: '#5B52F0', shadowOpacity: 0.08, shadowRadius: 8, elevation: 4 },
   suggestionItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
   suggestionBorder: { borderBottomWidth: 1, borderBottomColor: '#F4F3FF' },
   suggestionIcon: { fontSize: 14 },
   suggestionText: { fontSize: 13, color: '#1a1a2e', flex: 1 },
+  miniMapWrapper: { marginTop: 8, borderRadius: 14, overflow: 'hidden', borderWidth: 1.5, borderColor: '#DDD8FF' },
+  miniMap: { height: 220, width: '100%' },
+  miniMapHint: { backgroundColor: '#EEEDFE', paddingVertical: 8, paddingHorizontal: 12 },
+  miniMapHintText: { fontSize: 12, color: '#5B52F0', fontWeight: '500', textAlign: 'center' },
   saveBtn: { backgroundColor: '#5B52F0', borderRadius: 12, padding: 15, alignItems: 'center', marginTop: 8 },
   saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

@@ -6,6 +6,7 @@ import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, Alert, Image
 } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
 import { supabase } from '../lib/supabase';
 
 const SPORT_COLORS: { [key: string]: string } = {
@@ -28,11 +29,16 @@ const NIVEAU_CONFIG: { [key: string]: { color: string; bg: string } } = {
 
 const isVelo = (sport: string) => sport === 'route' || sport === 'vtt';
 
+// ─── Point 3 : capitalize ─────────────────────────────────────────────────────
+const capitalize = (str: string) =>
+  str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
+
 type Sortie = {
   id: string; titre: string; sport: string; distance: string;
   elevation: string; allure: string; lieu: string; lieu_rencontre: string;
   date_sortie: string; heure: string; participants_max: number;
   niveau: string; description: string; createur_id: string;
+  latitude?: number; longitude?: number;
 };
 
 type Profile = {
@@ -64,6 +70,7 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [showPublicProfile, setShowPublicProfile] = useState<string | null>(null);
   const [showEdit, setShowEdit] = useState(false);
+  const [isMapInteracting, setIsMapInteracting] = useState(false);
 
   useEffect(() => { fetchCreateur(); fetchParticipants(); checkIfJoined(); }, []);
 
@@ -117,6 +124,9 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
   const paceUnit = isVelo(sortie.sport) ? 'km/h' : '/km';
   const paceDisplay = sortie.allure ? `${sortie.allure} ${paceUnit}` : '—';
 
+  // ─── Point 5 : stats calculées depuis les sorties ────────────────────────
+  // (préparé ici pour usage futur — les vraies stats viennent de ProfileScreen)
+
   if (showEdit) return <EditRideScreen sortie={sortie} onBack={() => setShowEdit(false)} onSaved={() => { setShowEdit(false); onBack(); }} />;
   if (showPublicProfile) return <PublicProfileScreen userId={showPublicProfile} onBack={() => setShowPublicProfile(null)} />;
 
@@ -124,7 +134,6 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
     <SwipeBack onSwipeBack={onBack}>
       <View style={styles.container}>
 
-        {/* ─── Header ─────────────────────────────────────────────────── */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.backBtn} onPress={onBack}>
             <Text style={styles.backArrow}>←</Text>
@@ -133,21 +142,18 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
           <View style={{ width: 36 }} />
         </View>
 
-        <ScrollView contentContainerStyle={{ paddingBottom: 110 }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 110 }} scrollEnabled={!isMapInteracting}>
 
-          {/* ─── Card principale ──────────────────────────────────────── */}
           <View style={[styles.mainCard, { borderColor: color + '30' }]}>
-            {/* Barre colorée top */}
             <View style={[styles.mainCardAccent, { backgroundColor: color }]} />
-
             <View style={styles.mainCardInner}>
-              {/* Sport row */}
               <View style={styles.sportRow}>
                 <View style={[styles.sportIcon, { backgroundColor: bg }]}>
                   <Text style={{ fontSize: 26 }}>{SPORT_EMOJIS[sortie.sport]}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.titre}>{sortie.titre}</Text>
+                  {/* Point 3 : capitalize */}
+                  <Text style={styles.titre}>{capitalize(sortie.titre)}</Text>
                   <Text style={[styles.sportLabel, { color }]}>{SPORT_LABELS[sortie.sport]}</Text>
                 </View>
                 {niveau && (
@@ -156,8 +162,6 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
                   </View>
                 )}
               </View>
-
-              {/* Stats */}
               <View style={styles.statsGrid}>
                 <View style={[styles.statBox, { backgroundColor: color + '08', borderColor: color + '25' }]}>
                   <Text style={styles.statIcon}>📏</Text>
@@ -178,7 +182,6 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
             </View>
           </View>
 
-          {/* ─── Informations ─────────────────────────────────────────── */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Informations</Text>
             <View style={styles.infoCard}>
@@ -214,7 +217,33 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
             </View>
           </View>
 
-          {/* ─── Description ──────────────────────────────────────────── */}
+          {sortie.latitude && sortie.longitude && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Point de rendez-vous</Text>
+              <View style={[styles.mapCard, { borderColor: color + '30' }]}>
+                <MapView
+                  style={styles.miniMap}
+                  initialRegion={{ latitude: sortie.latitude, longitude: sortie.longitude, latitudeDelta: 0.008, longitudeDelta: 0.008 }}
+                  scrollEnabled={true}
+                  zoomEnabled={true}
+                  rotateEnabled={false}
+                  pitchEnabled={false}
+                  onTouchStart={() => setIsMapInteracting(true)}
+                  onTouchEnd={() => setIsMapInteracting(false)}
+                  onTouchCancel={() => setIsMapInteracting(false)}
+                >
+                  <Marker coordinate={{ latitude: sortie.latitude, longitude: sortie.longitude }} pinColor={color} />
+                </MapView>
+                <View style={[styles.mapFooter, { backgroundColor: bg }]}>
+                  <Text style={styles.mapFooterIcon}>📍</Text>
+                  <Text style={[styles.mapFooterText, { color }]} numberOfLines={1}>
+                    {sortie.lieu_rencontre || sortie.lieu}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+
           {sortie.description ? (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Description</Text>
@@ -224,7 +253,6 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
             </View>
           ) : null}
 
-          {/* ─── Parcours GPX ─────────────────────────────────────────── */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Parcours</Text>
             <View style={[styles.infoCard, styles.gpxCard]}>
@@ -234,7 +262,6 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
             </View>
           </View>
 
-          {/* ─── Organisateur ─────────────────────────────────────────── */}
           {createur && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Organisateur</Text>
@@ -251,7 +278,6 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
             </View>
           )}
 
-          {/* ─── Participants ─────────────────────────────────────────── */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Participants ({participantsCount}/{sortie.participants_max})</Text>
             <View style={styles.infoCard}>
@@ -280,7 +306,6 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
 
         </ScrollView>
 
-        {/* ─── Bottom bar ───────────────────────────────────────────── */}
         {!isCreateur && (
           <View style={styles.bottomBar}>
             {hasJoined ? (
@@ -317,19 +342,11 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F3FF', paddingTop: 56 },
-
-  // ─── Header ────────────────────────────────────────────────────────────────
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 12 },
   backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#EEEDFE', alignItems: 'center', justifyContent: 'center' },
   backArrow: { fontSize: 18, color: '#5B52F0' },
   headerTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a2e' },
-
-  // ─── Main card ─────────────────────────────────────────────────────────────
-  mainCard: {
-    backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 18,
-    borderWidth: 1, marginBottom: 14, overflow: 'hidden',
-    shadowColor: '#5B52F0', shadowOpacity: 0.08, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12, elevation: 4,
-  },
+  mainCard: { backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 18, borderWidth: 1, marginBottom: 14, overflow: 'hidden', shadowColor: '#5B52F0', shadowOpacity: 0.08, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12, elevation: 4 },
   mainCardAccent: { height: 4, width: '100%' },
   mainCardInner: { padding: 16 },
   sportRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
@@ -338,16 +355,12 @@ const styles = StyleSheet.create({
   sportLabel: { fontSize: 12, fontWeight: '600', marginTop: 2 },
   niveauBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1 },
   niveauText: { fontSize: 11, fontWeight: '700' },
-
-  // Stats
   statsGrid: { flexDirection: 'row', gap: 8 },
   statBox: { flex: 1, borderRadius: 10, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 4, alignItems: 'center', gap: 2 },
   statIcon: { fontSize: 14 },
   statVal: { fontSize: 15, fontWeight: '800' },
   statValSmall: { fontSize: 13 },
   statLabel: { fontSize: 10, color: '#8888bb', fontWeight: '500' },
-
-  // ─── Sections ──────────────────────────────────────────────────────────────
   section: { paddingHorizontal: 16, marginBottom: 12 },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: '#1a1a2e', marginBottom: 8 },
   infoCard: { backgroundColor: '#fff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E8E6FF' },
@@ -358,14 +371,15 @@ const styles = StyleSheet.create({
   infoVal: { fontSize: 14, fontWeight: '600', color: '#1a1a2e', marginTop: 2 },
   infoDivider: { height: 1, backgroundColor: '#F4F3FF', marginVertical: 12 },
   descriptionText: { fontSize: 14, color: '#1a1a2e', lineHeight: 22 },
-
-  // GPX
+  mapCard: { borderRadius: 14, borderWidth: 1, overflow: 'hidden', shadowColor: '#5B52F0', shadowOpacity: 0.06, shadowOffset: { width: 0, height: 3 }, shadowRadius: 8, elevation: 3 },
+  miniMap: { height: 220, width: '100%' },
+  mapFooter: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14 },
+  mapFooterIcon: { fontSize: 13 },
+  mapFooterText: { fontSize: 12, fontWeight: '600', flex: 1 },
   gpxCard: { alignItems: 'center', gap: 6, paddingVertical: 22 },
   gpxEmoji: { fontSize: 30 },
   gpxTitle: { fontSize: 14, fontWeight: '600', color: '#1a1a2e' },
   gpxSub: { fontSize: 12, color: '#8888bb' },
-
-  // Personnes
   personRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   personName: { fontSize: 14, fontWeight: '600', color: '#1a1a2e' },
   personSub: { fontSize: 12, color: '#8888bb', marginTop: 2 },
@@ -373,8 +387,6 @@ const styles = StyleSheet.create({
   emptyParticipantsWrap: { alignItems: 'center', paddingVertical: 12, gap: 6 },
   emptyParticipantsEmoji: { fontSize: 24 },
   emptyParticipants: { fontSize: 13, color: '#8888bb', textAlign: 'center' },
-
-  // ─── Bottom bar ────────────────────────────────────────────────────────────
   bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: 24, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#E8E6FF' },
   joinBtn: { borderRadius: 14, padding: 15, alignItems: 'center' },
   joinText: { color: '#fff', fontSize: 15, fontWeight: '700' },

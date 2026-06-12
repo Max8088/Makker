@@ -26,7 +26,6 @@ const SPORT_BG: { [key: string]: string } = {
 const SPORT_EMOJIS: { [key: string]: string } = {
   route: '🚴', vtt: '🚵', trail: '🏔️', running: '🏃',
 };
-
 const NIVEAU_CONFIG: { [key: string]: { color: string; bg: string } } = {
   facile:        { color: '#2D6A4F', bg: '#F0FDF4' },
   intermediaire: { color: '#D97706', bg: '#FFFBEB' },
@@ -34,6 +33,10 @@ const NIVEAU_CONFIG: { [key: string]: { color: string; bg: string } } = {
 };
 
 const TABS = ['Statistiques', 'Sorties', 'Infos'];
+
+// ─── Point 3 : capitalize ─────────────────────────────────────────────────────
+const capitalize = (str: string) =>
+  str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
 
 type Profile = {
   id: string; prenom: string; nom: string; ville: string;
@@ -66,7 +69,11 @@ export default function ProfileScreen() {
   const fetchSorties = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase.from('sorties').select('id, titre, sport, distance, elevation, date_sortie').eq('createur_id', user.id).order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from('sorties')
+      .select('id, titre, sport, distance, elevation, date_sortie')
+      .eq('createur_id', user.id)
+      .order('created_at', { ascending: false });
     setSorties(data || []);
   };
 
@@ -93,6 +100,12 @@ export default function ProfileScreen() {
   const toggleCreneau = (id: string) => {
     setCreneaux(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
   };
+
+  // ─── Point 6 : stats calculées depuis les sorties ────────────────────────
+  const kmTotal = sorties.reduce((acc, s) => acc + (parseFloat(s.distance) || 0), 0);
+  const deniveleTotal = sorties.reduce((acc, s) => acc + (parseFloat(s.elevation) || 0), 0);
+  const kmTotalLabel = kmTotal > 0 ? `${Math.round(kmTotal)} km` : '—';
+  const deniveleTotalLabel = deniveleTotal > 0 ? `${Math.round(deniveleTotal)} m` : '—';
 
   const initiales = profile ? `${profile.prenom?.[0] || ''}${profile.nom?.[0] || ''}`.toUpperCase() : '?';
   const nomComplet = profile ? `${profile.prenom || ''} ${profile.nom || ''}`.trim() : 'Chargement...';
@@ -124,11 +137,8 @@ export default function ProfileScreen() {
 
         {/* ─── Profile card ─────────────────────────────────────────── */}
         <View style={[styles.profileCard, { borderColor: mainColor + '25' }]}>
-          {/* Barre colorée top */}
           <View style={[styles.profileCardAccent, { backgroundColor: mainColor }]} />
-
           <View style={styles.profileCardInner}>
-            {/* Avatar */}
             <View style={[styles.avatarWrap, { borderColor: mainColor + '40', backgroundColor: mainBg }]}>
               {profile?.avatar_url ? (
                 <Image source={{ uri: profile.avatar_url }} style={styles.avatarImg} />
@@ -136,11 +146,8 @@ export default function ProfileScreen() {
                 <Text style={[styles.avatarText, { color: mainColor }]}>{initiales}</Text>
               )}
             </View>
-
             <Text style={styles.profileName}>{nomComplet}</Text>
             <Text style={styles.locationText}>📍 {profile?.ville || 'Lyon, France'}</Text>
-
-            {/* Badges sport + niveau */}
             <View style={styles.badgesRow}>
               <View style={[styles.badge, { backgroundColor: mainBg, borderColor: mainColor + '40' }]}>
                 <Text style={styles.badgeEmoji}>{SPORT_EMOJIS[sportPrincipal]}</Text>
@@ -152,8 +159,7 @@ export default function ProfileScreen() {
                 </View>
               )}
             </View>
-
-            {/* Stats */}
+            {/* Stats rapides — point 6 : km total calculé */}
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Text style={[styles.statVal, { color: mainColor }]}>{sorties.length}</Text>
@@ -161,13 +167,13 @@ export default function ProfileScreen() {
               </View>
               <View style={[styles.statDivider, { backgroundColor: mainColor + '20' }]} />
               <View style={styles.statItem}>
-                <Text style={[styles.statVal, { color: mainColor }]}>4.8 ⭐</Text>
-                <Text style={styles.statLabel}>Note</Text>
+                <Text style={[styles.statVal, { color: mainColor }]}>{kmTotalLabel}</Text>
+                <Text style={styles.statLabel}>km total</Text>
               </View>
               <View style={[styles.statDivider, { backgroundColor: mainColor + '20' }]} />
               <View style={styles.statItem}>
-                <Text style={[styles.statVal, { color: mainColor }]}>—</Text>
-                <Text style={styles.statLabel}>km total</Text>
+                <Text style={[styles.statVal, { color: mainColor }]}>{deniveleTotalLabel}</Text>
+                <Text style={styles.statLabel}>m D+</Text>
               </View>
             </View>
           </View>
@@ -193,12 +199,14 @@ export default function ProfileScreen() {
               </View>
               <View style={[styles.statCard, { borderColor: mainColor + '25', backgroundColor: mainBg }]}>
                 <Text style={styles.statCardIcon}>📏</Text>
-                <Text style={[styles.statCardVal, { color: mainColor }]}>—</Text>
+                {/* Point 6 : vrai km total */}
+                <Text style={[styles.statCardVal, { color: mainColor }]}>{kmTotalLabel}</Text>
                 <Text style={styles.statCardLabel}>km total</Text>
               </View>
               <View style={[styles.statCard, { borderColor: mainColor + '25', backgroundColor: mainBg }]}>
                 <Text style={styles.statCardIcon}>⛰️</Text>
-                <Text style={[styles.statCardVal, { color: mainColor }]}>—</Text>
+                {/* Point 6 : vrai dénivelé total */}
+                <Text style={[styles.statCardVal, { color: mainColor }]}>{deniveleTotalLabel}</Text>
                 <Text style={styles.statCardLabel}>m D+</Text>
               </View>
             </View>
@@ -224,7 +232,8 @@ export default function ProfileScreen() {
                       <Text style={{ fontSize: 18 }}>{SPORT_EMOJIS[ride.sport]}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.rideName} numberOfLines={1}>{ride.titre}</Text>
+                      {/* Point 3 : capitalize */}
+                      <Text style={styles.rideName} numberOfLines={1}>{capitalize(ride.titre)}</Text>
                       <Text style={styles.rideDate}>{ride.date_sortie}</Text>
                       <View style={styles.rideStatsRow}>
                         <Text style={[styles.rideStat, { color: rColor }]}>📏 {ride.distance} km</Text>
@@ -306,21 +315,13 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F3FF', paddingTop: 56 },
-
-  // ─── Top bar ───────────────────────────────────────────────────────────────
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 14 },
   pageTitle: { fontSize: 30, fontWeight: '900', color: '#1a1a2e', letterSpacing: 0.5 },
   topBarActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   logoutBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#ffdddd' },
   logoutBtnText: { fontSize: 12, fontWeight: '600', color: '#e05c3a' },
   settingsBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#DDD8FF', alignItems: 'center', justifyContent: 'center' },
-
-  // ─── Profile card ──────────────────────────────────────────────────────────
-  profileCard: {
-    backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 18,
-    borderWidth: 1, marginBottom: 14, overflow: 'hidden',
-    shadowColor: '#5B52F0', shadowOpacity: 0.08, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12, elevation: 4,
-  },
+  profileCard: { backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 18, borderWidth: 1, marginBottom: 14, overflow: 'hidden', shadowColor: '#5B52F0', shadowOpacity: 0.08, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12, elevation: 4 },
   profileCardAccent: { height: 4, width: '100%' },
   profileCardInner: { padding: 20, alignItems: 'center' },
   avatarWrap: { width: 80, height: 80, borderRadius: 24, borderWidth: 3, alignItems: 'center', justifyContent: 'center', marginBottom: 12, overflow: 'hidden' },
@@ -337,61 +338,38 @@ const styles = StyleSheet.create({
   statVal: { fontSize: 18, fontWeight: '800' },
   statLabel: { fontSize: 11, color: '#8888bb' },
   statDivider: { width: 1, height: 30 },
-
-  // ─── Tabs ──────────────────────────────────────────────────────────────────
   tabs: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E8E6FF', marginBottom: 4 },
   tab: { flex: 1, paddingVertical: 13, alignItems: 'center', borderBottomWidth: 2.5, borderBottomColor: 'transparent' },
   tabText: { fontSize: 13, fontWeight: '500', color: '#8888bb' },
-
-  // ─── Section ───────────────────────────────────────────────────────────────
   section: { padding: 16 },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: '#1a1a2e', marginBottom: 10 },
-
-  // Stats grid
   statsGrid: { flexDirection: 'row', gap: 8 },
   statCard: { flex: 1, borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, gap: 4 },
   statCardIcon: { fontSize: 20 },
   statCardVal: { fontSize: 18, fontWeight: '800' },
   statCardLabel: { fontSize: 10, color: '#8888bb', fontWeight: '500', textAlign: 'center' },
-
-  // Empty
   emptyWrap: { alignItems: 'center', paddingTop: 40, gap: 8 },
   emptyEmoji: { fontSize: 36 },
   emptyText: { fontSize: 14, color: '#8888bb', fontWeight: '500' },
-
-  // Ride items
-  rideItem: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: 14, borderWidth: 1,
-    marginBottom: 8, overflow: 'hidden',
-    shadowColor: '#5B52F0', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 2,
-  },
+  rideItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, marginBottom: 8, overflow: 'hidden', shadowColor: '#5B52F0', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 2 },
   rideAccent: { width: 4, alignSelf: 'stretch' },
   rideIcon: { width: 40, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginLeft: 10, marginVertical: 12 },
   rideName: { fontSize: 13, fontWeight: '700', color: '#1a1a2e', marginBottom: 2, paddingLeft: 10, paddingRight: 10, paddingTop: 12 },
   rideDate: { fontSize: 11, color: '#8888bb', paddingLeft: 10 },
   rideStatsRow: { flexDirection: 'row', gap: 10, paddingLeft: 10, paddingBottom: 12, paddingTop: 4 },
   rideStat: { fontSize: 12, fontWeight: '600' },
-
-  // Sports
   sportGrid: { flexDirection: 'row', gap: 8 },
   sportBtn: { flex: 1, alignItems: 'center', padding: 10, borderRadius: 12, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff' },
   sportEmoji: { fontSize: 20, marginBottom: 4 },
   sportLabel: { fontSize: 11, color: '#8888bb' },
-
-  // Zone
   zoneCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 12, padding: 14, borderWidth: 1 },
   zoneEmoji: { fontSize: 24 },
   zoneName: { fontSize: 14, fontWeight: '700' },
   zoneRadius: { fontSize: 12, color: '#8888bb', marginTop: 2 },
-
-  // Créneaux
   creneauxGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   creneauBtn: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff' },
   creneauText: { fontSize: 13, fontWeight: '500', color: '#8888bb' },
   creneauTextActive: { color: '#fff', fontWeight: '600' },
-
-  // Save
   saveBtn: { borderRadius: 14, padding: 15, alignItems: 'center', marginTop: 20 },
   saveBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });

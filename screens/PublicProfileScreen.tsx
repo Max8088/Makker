@@ -4,38 +4,33 @@ import { supabase } from '../lib/supabase';
 import SwipeBack from '../components/SwipeBack';
 
 const SPORT_COLORS: { [key: string]: string } = {
-  route: '#4F46E5', vtt: '#f59f00', trail: '#5B52F0', running: '#A78BFA'
+  route: '#4F46E5', vtt: '#F59F00', trail: '#2D6A4F', running: '#610230',
+};
+const SPORT_BG: { [key: string]: string } = {
+  route: '#EEF2FF', vtt: '#FFFBEB', trail: '#F0FDF4', running: '#F9F0F4',
 };
 const SPORT_EMOJIS: { [key: string]: string } = {
-  route: '🚴', vtt: '🚵', trail: '🏔️', running: '🏃'
+  route: '🚴', vtt: '🚵', trail: '🏔️', running: '🏃',
 };
 const SPORT_LABELS: { [key: string]: string } = {
-  route: 'Cyclisme Route', vtt: 'VTT', trail: 'Trail', running: 'Running'
+  route: 'Cyclisme Route', vtt: 'VTT', trail: 'Trail', running: 'Running',
 };
-const NIVEAU_COLORS: { [key: string]: string } = {
-  debutant: '#22c55e', intermediaire: '#f59f00', avance: '#e05c3a'
+const NIVEAU_CONFIG: { [key: string]: { color: string; bg: string } } = {
+  facile:        { color: '#2D6A4F', bg: '#F0FDF4' },
+  intermediaire: { color: '#D97706', bg: '#FFFBEB' },
+  difficile:     { color: '#610230', bg: '#F9F0F4' },
 };
 
+const capitalize = (str: string) =>
+  str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
 
 type Profile = {
-  id: string;
-  prenom: string;
-  nom: string;
-  ville: string;
-  sport_principal: string;
-  niveau: string;
-  avatar_url?: string;
+  id: string; prenom: string; nom: string; ville: string;
+  sport_principal: string; niveau: string; avatar_url?: string;
 };
-
 type Sortie = {
-  id: string;
-  titre: string;
-  sport: string;
-  distance: string;
-  elevation: string;
-  date_sortie: string;
+  id: string; titre: string; sport: string; distance: string; elevation: string; date_sortie: string;
 };
-
 type Props = { userId: string; onBack: () => void; };
 
 export default function PublicProfileScreen({ userId, onBack }: Props) {
@@ -64,7 +59,15 @@ export default function PublicProfileScreen({ userId, onBack }: Props) {
   const initiales = profile
     ? `${profile.prenom?.[0] || ''}${profile.nom?.[0] || ''}`.toUpperCase()
     : '?';
-  const niveauColor = NIVEAU_COLORS[profile?.niveau || ''] || '#8888bb';
+
+  const sportKey = profile?.sport_principal || 'route';
+  const mainColor = SPORT_COLORS[sportKey] || '#5B52F0';
+  const mainBg = SPORT_BG[sportKey] || '#EEEDFE';
+  const niveauConf = NIVEAU_CONFIG[profile?.niveau || 'intermediaire'];
+
+  // Stats calculées
+  const kmTotal = sorties.reduce((acc, s) => acc + (parseFloat(s.distance) || 0), 0);
+  const kmTotalLabel = kmTotal > 0 ? `${Math.round(kmTotal)} km` : '—';
 
   if (loading) return (
     <SwipeBack onSwipeBack={onBack}>
@@ -90,69 +93,68 @@ export default function PublicProfileScreen({ userId, onBack }: Props) {
 
         <ScrollView contentContainerStyle={{ paddingBottom: 30 }}>
 
-          {/* Carte principale */}
-          <View style={styles.profileCard}>
-            {profile?.avatar_url ? (
-              <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
-            ) : (
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{initiales}</Text>
+          {/* ─── Carte profil ──────────────────────────────────────────── */}
+          <View style={[styles.profileCard, { borderColor: mainColor + '25' }]}>
+            <View style={[styles.profileCardAccent, { backgroundColor: mainColor }]} />
+            <View style={styles.profileCardInner}>
+              <View style={[styles.avatarWrap, { borderColor: mainColor + '40', backgroundColor: mainBg }]}>
+                {profile?.avatar_url ? (
+                  <Image source={{ uri: profile.avatar_url }} style={styles.avatarImg} />
+                ) : (
+                  <Text style={[styles.avatarText, { color: mainColor }]}>{initiales}</Text>
+                )}
               </View>
-            )}
-            <Text style={styles.profileName}>{profile?.prenom} {profile?.nom}</Text>
-            <Text style={styles.profileVille}>📍 {profile?.ville}</Text>
+              <Text style={styles.profileName}>{profile?.prenom} {profile?.nom}</Text>
+              <Text style={styles.locationText}>📍 {profile?.ville}</Text>
 
-            <View style={styles.badgesRow}>
-              <View style={[styles.badge, { backgroundColor: SPORT_COLORS[profile?.sport_principal || 'route'] + '20', borderColor: SPORT_COLORS[profile?.sport_principal || 'route'] }]}>
-                <Text style={[styles.badgeText, { color: SPORT_COLORS[profile?.sport_principal || 'route'] }]}>
-                  {SPORT_EMOJIS[profile?.sport_principal || 'route']} {SPORT_LABELS[profile?.sport_principal || 'route']}
-                </Text>
+              <View style={styles.badgesRow}>
+                <View style={[styles.badge, { backgroundColor: mainBg, borderColor: mainColor + '40' }]}>
+                  <Text style={styles.badgeEmoji}>{SPORT_EMOJIS[sportKey]}</Text>
+                  <Text style={[styles.badgeText, { color: mainColor }]}>{SPORT_LABELS[sportKey]}</Text>
+                </View>
+                {niveauConf && (
+                  <View style={[styles.badge, { backgroundColor: niveauConf.bg, borderColor: niveauConf.color + '40' }]}>
+                    <Text style={[styles.badgeText, { color: niveauConf.color }]}>📈 {profile?.niveau}</Text>
+                  </View>
+                )}
               </View>
-              <View style={[styles.badge, { backgroundColor: niveauColor + '20', borderColor: niveauColor }]}>
-                <Text style={[styles.badgeText, { color: niveauColor }]}>
-                  📈 {profile?.niveau || 'Intermédiaire'}
-                </Text>
-              </View>
-            </View>
 
-            {/* Stats rapides */}
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={styles.statVal}>{sorties.length}</Text>
-                <Text style={styles.statLabel}>Sorties</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statVal}>4.8 ⭐</Text>
-                <Text style={styles.statLabel}>Note</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statVal}>{SPORT_EMOJIS[profile?.sport_principal || 'route']}</Text>
-                <Text style={styles.statLabel}>Sport</Text>
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <Text style={[styles.statVal, { color: mainColor }]}>{sorties.length}</Text>
+                  <Text style={styles.statLabel}>Sorties</Text>
+                </View>
+                <View style={[styles.statDivider, { backgroundColor: mainColor + '20' }]} />
+                <View style={styles.statItem}>
+                  <Text style={[styles.statVal, { color: mainColor }]}>{kmTotalLabel}</Text>
+                  <Text style={styles.statLabel}>km total</Text>
+                </View>
+                <View style={[styles.statDivider, { backgroundColor: mainColor + '20' }]} />
+                <View style={styles.statItem}>
+                  <Text style={[styles.statVal, { color: mainColor }]}>4.8 ⭐</Text>
+                  <Text style={styles.statLabel}>Note</Text>
+                </View>
               </View>
             </View>
           </View>
 
-          {/* Zone géographique */}
+          {/* ─── Zone géographique ────────────────────────────────────── */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Zone géographique</Text>
-            <View style={styles.infoCard}>
+            <View style={[styles.infoCard, { borderColor: mainColor + '20' }]}>
               <View style={styles.infoRow}>
-                <View style={styles.infoIconWrap}>
-                  <Text style={{ fontSize: 20 }}>📍</Text>
+                <View style={[styles.infoIconWrap, { backgroundColor: mainColor + '15' }]}>
+                  <Text style={{ fontSize: 17 }}>📍</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.infoMain}>{profile?.ville || '—'} & alentours</Text>
+                  <Text style={[styles.infoMain, { color: mainColor }]}>{profile?.ville || '—'} & alentours</Text>
                   <Text style={styles.infoSub}>Rayon de 50 km</Text>
                 </View>
               </View>
             </View>
           </View>
 
-
-
-          {/* Sorties organisées */}
+          {/* ─── Sorties organisées ───────────────────────────────────── */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Sorties organisées</Text>
             {sorties.length === 0 ? (
@@ -160,21 +162,26 @@ export default function PublicProfileScreen({ userId, onBack }: Props) {
                 <Text style={styles.emptyText}>Aucune sortie créée pour l'instant</Text>
               </View>
             ) : (
-              sorties.map(ride => (
-                <View key={ride.id} style={styles.rideItem}>
-                  <View style={[styles.rideIcon, { backgroundColor: SPORT_COLORS[ride.sport] + '20' }]}>
-                    <Text style={{ fontSize: 20 }}>{SPORT_EMOJIS[ride.sport]}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.rideName}>{ride.titre}</Text>
-                    <Text style={styles.rideDate}>{ride.date_sortie}</Text>
-                    <View style={styles.rideStats}>
-                      <Text style={styles.rideStat}>{ride.distance} km</Text>
-                      <Text style={styles.rideStat}>↗ {ride.elevation} m</Text>
+              sorties.map(ride => {
+                const rColor = SPORT_COLORS[ride.sport] || '#5B52F0';
+                const rBg = SPORT_BG[ride.sport] || '#EEEDFE';
+                return (
+                  <View key={ride.id} style={[styles.rideItem, { borderColor: rColor + '25' }]}>
+                    <View style={[styles.rideAccent, { backgroundColor: rColor }]} />
+                    <View style={[styles.rideIcon, { backgroundColor: rBg }]}>
+                      <Text style={{ fontSize: 18 }}>{SPORT_EMOJIS[ride.sport]}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rideName} numberOfLines={1}>{capitalize(ride.titre)}</Text>
+                      <Text style={styles.rideDate}>{ride.date_sortie}</Text>
+                      <View style={styles.rideStatsRow}>
+                        <Text style={[styles.rideStat, { color: rColor }]}>📏 {ride.distance} km</Text>
+                        <Text style={[styles.rideStat, { color: rColor }]}>⛰️ {ride.elevation} m</Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              ))
+                );
+              })
             )}
           </View>
 
@@ -192,36 +199,51 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a2e' },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { fontSize: 15, color: '#8888bb' },
-  // Carte profil
-  profileCard: { backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 16, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#DDD8FF', marginBottom: 12 },
-  avatar: { width: 80, height: 80, borderRadius: 24, backgroundColor: '#5B52F0', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  avatarText: { fontSize: 28, fontWeight: '700', color: '#fff' },
-  profileName: { fontSize: 18, fontWeight: '700', color: '#1a1a2e', marginBottom: 4 },
-  profileVille: { fontSize: 13, color: '#8888bb', marginBottom: 14 },
+
+  // ─── Carte profil ──────────────────────────────────────────────────────────
+  profileCard: {
+    backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 18,
+    borderWidth: 1, marginBottom: 14, overflow: 'hidden',
+    shadowColor: '#5B52F0', shadowOpacity: 0.08, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12, elevation: 4,
+  },
+  profileCardAccent: { height: 4, width: '100%' },
+  profileCardInner: { padding: 20, alignItems: 'center' },
+  avatarWrap: { width: 80, height: 80, borderRadius: 24, borderWidth: 3, alignItems: 'center', justifyContent: 'center', marginBottom: 12, overflow: 'hidden' },
+  avatarImg: { width: 80, height: 80, borderRadius: 24 },
+  avatarText: { fontSize: 28, fontWeight: '800' },
+  profileName: { fontSize: 20, fontWeight: '800', color: '#1a1a2e', marginBottom: 4 },
+  locationText: { fontSize: 13, color: '#8888bb', marginBottom: 12 },
   badgesRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 16 },
-  badge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
-  badgeText: { fontSize: 12, fontWeight: '600' },
-  // Stats rapides
-  statsRow: { flexDirection: 'row', alignItems: 'center', width: '100%', paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F4F3FF' },
-  statItem: { flex: 1, alignItems: 'center', gap: 4 },
-  statVal: { fontSize: 16, fontWeight: '700', color: '#1a1a2e' },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
+  badgeEmoji: { fontSize: 13 },
+  badgeText: { fontSize: 12, fontWeight: '700' },
+  statsRow: { flexDirection: 'row', alignItems: 'center', width: '100%', justifyContent: 'center', gap: 20 },
+  statItem: { alignItems: 'center', gap: 2 },
+  statVal: { fontSize: 18, fontWeight: '800' },
   statLabel: { fontSize: 11, color: '#8888bb' },
-  statDivider: { width: 1, height: 30, backgroundColor: '#DDD8FF' },
-  // Sections
+  statDivider: { width: 1, height: 30 },
+
+  // ─── Sections ──────────────────────────────────────────────────────────────
   section: { paddingHorizontal: 16, marginBottom: 12 },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: '#1a1a2e', marginBottom: 8 },
-  infoCard: { backgroundColor: '#fff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#DDD8FF' },
+  infoCard: { backgroundColor: '#fff', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E8E6FF' },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  infoIconWrap: { width: 40, height: 40, borderRadius: 11, backgroundColor: '#F4F3FF', alignItems: 'center', justifyContent: 'center' },
-  infoMain: { fontSize: 14, fontWeight: '600', color: '#1a1a2e' },
+  infoIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  infoMain: { fontSize: 14, fontWeight: '700' },
   infoSub: { fontSize: 12, color: '#8888bb', marginTop: 2 },
-  // Créneaux
   emptyText: { fontSize: 13, color: '#8888bb', textAlign: 'center' },
-  // Rides
-  rideItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#DDD8FF' },
-  rideIcon: { width: 40, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  rideName: { fontSize: 13, fontWeight: '600', color: '#1a1a2e' },
-  rideDate: { fontSize: 11, color: '#8888bb', marginTop: 1 },
-  rideStats: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  rideStat: { fontSize: 12, fontWeight: '600', color: '#5B52F0' },
+
+  // ─── Ride items ────────────────────────────────────────────────────────────
+  rideItem: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#fff', borderRadius: 14, borderWidth: 1,
+    marginBottom: 8, overflow: 'hidden',
+    shadowColor: '#5B52F0', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, elevation: 2,
+  },
+  rideAccent: { width: 4, alignSelf: 'stretch' },
+  rideIcon: { width: 40, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginLeft: 10, marginVertical: 12 },
+  rideName: { fontSize: 13, fontWeight: '700', color: '#1a1a2e', paddingLeft: 10, paddingRight: 10, paddingTop: 12, marginBottom: 2 },
+  rideDate: { fontSize: 11, color: '#8888bb', paddingLeft: 10 },
+  rideStatsRow: { flexDirection: 'row', gap: 10, paddingLeft: 10, paddingBottom: 12, paddingTop: 4 },
+  rideStat: { fontSize: 12, fontWeight: '600' },
 });
