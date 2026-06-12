@@ -73,7 +73,7 @@ export default function FiltersSheet({ visible, filters, onApply, onClose }: Pro
         if (g.dy > 0) translateY.setValue(g.dy);
       },
       onPanResponderRelease: (_, g) => {
-        if (g.dy > 100) {
+        if (g.dy > 50) {
           Animated.timing(translateY, {
             toValue: 600,
             duration: 200,

@@ -16,12 +16,22 @@ const SPORTS_FILTERS = [
 ];
 
 const SPORT_COLORS: { [key: string]: string } = {
-  route: '#4F46E5', vtt: '#f59f00', trail: '#5B52F0', running: '#A78BFA'
+  route: '#4F46E5', vtt: '#F59F00', trail: '#2D6A4F', running: '#610230',
+};
+const SPORT_BG: { [key: string]: string } = {
+  route: '#EEF2FF', vtt: '#FFFBEB', trail: '#F0FDF4', running: '#F9F0F4',
+};
+const SPORT_EMOJIS: { [key: string]: string } = {
+  route: '🚴', vtt: '🚵', trail: '🏔️', running: '🏃',
+};
+const SPORT_LABELS: { [key: string]: string } = {
+  route: 'Cyclisme Route', vtt: 'VTT', trail: 'Trail', running: 'Running',
 };
 
-const SPORT_EMOJIS: { [key: string]: string } = {
-  route: '🚴', vtt: '🚵', trail: '🏔️', running: '🏃'
-};
+const isVelo = (sport: string) => sport === 'route' || sport === 'vtt';
+
+const capitalize = (str: string) =>
+  str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
 
 const parseDate = (dateStr: string): Date => {
   if (!dateStr) return new Date();
@@ -38,28 +48,14 @@ const isSameDay = (a: Date, b: Date) =>
   a.getDate() === b.getDate();
 
 type Sortie = {
-  id: string;
-  titre: string;
-  sport: string;
-  distance: string;
-  elevation: string;
-  allure: string;
-  lieu: string;
-  lieu_rencontre: string;
-  date_sortie: string;
-  heure: string;
-  participants_max: number;
-  latitude: number;
-  longitude: number;
-  niveau: string;
-  description: string;
-  createur_id: string;
+  id: string; titre: string; sport: string; distance: string;
+  elevation: string; allure: string; lieu: string; lieu_rencontre: string;
+  date_sortie: string; heure: string; participants_max: number;
+  latitude: number; longitude: number;
+  niveau: string; description: string; createur_id: string;
 };
 
-type UserLocation = {
-  latitude: number;
-  longitude: number;
-};
+type UserLocation = { latitude: number; longitude: number; };
 
 export default function MapScreen() {
   const [activeFilter, setActiveFilter] = useState('all');
@@ -120,7 +116,13 @@ export default function MapScreen() {
     filters.placesDisponibles,
   ].filter(Boolean).length;
 
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
   const filtered = sorties.filter(ride => {
+    // Filtre sorties passées
+    const dateRide = parseDate(ride.date_sortie); dateRide.setHours(0, 0, 0, 0);
+    if (dateRide < today) return false;
+
     if (activeFilter !== 'all' && ride.sport !== activeFilter) return false;
     if (filters.sport !== 'all' && ride.sport !== filters.sport) return false;
     if (filters.niveau !== 'all' && ride.niveau !== filters.niveau) return false;
@@ -139,18 +141,17 @@ export default function MapScreen() {
     }
 
     if (filters.date !== 'all') {
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const dateRide = parseDate(ride.date_sortie); dateRide.setHours(0, 0, 0, 0);
-      const jour = dateRide.getDay();
-      if (filters.date === 'today' && !isSameDay(dateRide, today)) return false;
+      const dr = parseDate(ride.date_sortie); dr.setHours(0, 0, 0, 0);
+      const jour = dr.getDay();
+      if (filters.date === 'today' && !isSameDay(dr, today)) return false;
       if (filters.date === 'week') {
         const endOfWeek = new Date(today); endOfWeek.setDate(today.getDate() + 7); endOfWeek.setHours(23, 59, 59, 999);
-        if (dateRide < today || dateRide > endOfWeek) return false;
+        if (dr < today || dr > endOfWeek) return false;
       }
       if (filters.date === 'weekend') {
         const daysUntilWeekend = new Date(today); daysUntilWeekend.setDate(today.getDate() + 14);
         if (jour !== 0 && jour !== 6) return false;
-        if (dateRide < today || dateRide > daysUntilWeekend) return false;
+        if (dr < today || dr > daysUntilWeekend) return false;
       }
     }
     return true;
@@ -196,13 +197,22 @@ export default function MapScreen() {
         ))}
       </MapView>
 
+      {/* Chips filtre sport */}
       <View style={styles.filtersContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
-          {SPORTS_FILTERS.map(s => (
-            <TouchableOpacity key={s.id} style={[styles.chip, activeFilter === s.id && styles.chipActive]} onPress={() => setActiveFilter(s.id)}>
-              <Text style={[styles.chipText, activeFilter === s.id && styles.chipTextActive]}>{s.label}</Text>
-            </TouchableOpacity>
-          ))}
+          {SPORTS_FILTERS.map(s => {
+            const isActive = activeFilter === s.id;
+            const color = s.id !== 'all' ? SPORT_COLORS[s.id] : '#5B52F0';
+            return (
+              <TouchableOpacity
+                key={s.id}
+                style={[styles.chip, isActive && { backgroundColor: color, borderColor: color }]}
+                onPress={() => setActiveFilter(s.id)}
+              >
+                <Text style={[styles.chipText, isActive && styles.chipTextActive]}>{s.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 
@@ -216,35 +226,58 @@ export default function MapScreen() {
         <Text style={styles.locateBtnText}>📍</Text>
       </TouchableOpacity>
 
+      {/* Popup sortie sélectionnée */}
       {selectedRide && (
-        <View style={styles.rideCard}>
+        <View style={[styles.rideCard, { borderColor: SPORT_COLORS[selectedRide.sport] + '30' }]}>
           <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedRide(null)}>
             <Text style={styles.closeBtnText}>✕</Text>
           </TouchableOpacity>
-          <View style={styles.cardHeader}>
-            <View style={[styles.cardIcon, { backgroundColor: SPORT_COLORS[selectedRide.sport] + '20' }]}>
-              <Text style={{ fontSize: 22 }}>{SPORT_EMOJIS[selectedRide.sport]}</Text>
+
+          {/* Barre colorée top */}
+          <View style={[styles.rideCardAccent, { backgroundColor: SPORT_COLORS[selectedRide.sport] }]} />
+
+          <View style={styles.rideCardInner}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.cardIcon, { backgroundColor: SPORT_BG[selectedRide.sport] }]}>
+                <Text style={{ fontSize: 20 }}>{SPORT_EMOJIS[selectedRide.sport]}</Text>
+              </View>
+              <View style={{ flex: 1, paddingRight: 44 }}>
+                <Text style={styles.cardTitle} numberOfLines={1}>{capitalize(selectedRide.titre)}</Text>
+                <Text style={[styles.cardSport, { color: SPORT_COLORS[selectedRide.sport] }]}>
+                  {SPORT_LABELS[selectedRide.sport]}
+                </Text>
+              </View>
             </View>
-            <View style={{ flex: 1, paddingRight: 50 }}>
-              <Text style={styles.cardTitle}>{selectedRide.titre}</Text>
-              <Text style={styles.cardSport}>{selectedRide.sport.charAt(0).toUpperCase() + selectedRide.sport.slice(1)}</Text>
+
+            <View style={styles.cardStats}>
+              <View style={styles.cardStat}>
+                <Text style={styles.cardStatLabel}>Distance</Text>
+                <Text style={[styles.cardStatVal, { color: SPORT_COLORS[selectedRide.sport] }]}>{selectedRide.distance} km</Text>
+              </View>
+              <View style={styles.cardStat}>
+                <Text style={styles.cardStatLabel}>Dénivelé</Text>
+                <Text style={[styles.cardStatVal, { color: SPORT_COLORS[selectedRide.sport] }]}>{selectedRide.elevation} m</Text>
+              </View>
+              <View style={styles.cardStat}>
+                <Text style={styles.cardStatLabel}>{isVelo(selectedRide.sport) ? 'Vitesse' : 'Allure'}</Text>
+                <Text style={[styles.cardStatVal, { color: SPORT_COLORS[selectedRide.sport] }]}>
+                  {selectedRide.allure ? `${selectedRide.allure} ${isVelo(selectedRide.sport) ? 'km/h' : '/km'}` : '—'}
+                </Text>
+              </View>
             </View>
-          </View>
-          <View style={styles.cardStats}>
-            <View style={styles.cardStat}><Text style={styles.cardStatLabel}>Distance</Text><Text style={styles.cardStatVal}>{selectedRide.distance} km</Text></View>
-            <View style={styles.cardStat}><Text style={styles.cardStatLabel}>Dénivelé</Text><Text style={styles.cardStatVal}>{selectedRide.elevation} m</Text></View>
-            <View style={styles.cardStat}><Text style={styles.cardStatLabel}>Allure</Text><Text style={styles.cardStatVal}>{selectedRide.allure}</Text></View>
-          </View>
-          <Text style={styles.cardMeta}>📍 {selectedRide.lieu}  ·  📅 {selectedRide.date_sortie} à {selectedRide.heure}</Text>
-          <View style={styles.cardFooter}>
-            <Text style={styles.going}>Max {selectedRide.participants_max} participants</Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TouchableOpacity style={styles.detailBtn} onPress={() => setShowDetail(true)}>
-                <Text style={styles.detailText}>Détails</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.joinBtn} onPress={() => handleRejoindre(selectedRide.id)}>
-                <Text style={styles.joinText}>Rejoindre</Text>
-              </TouchableOpacity>
+
+            <Text style={styles.cardMeta}>📍 {selectedRide.lieu}  ·  📅 {selectedRide.date_sortie} à {selectedRide.heure}</Text>
+
+            <View style={styles.cardFooter}>
+              <Text style={styles.going}>👥 Max {selectedRide.participants_max}</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity style={styles.detailBtn} onPress={() => setShowDetail(true)}>
+                  <Text style={styles.detailText}>Détails</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.joinBtn, { backgroundColor: SPORT_COLORS[selectedRide.sport] }]} onPress={() => handleRejoindre(selectedRide.id)}>
+                  <Text style={styles.joinText}>Rejoindre</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
@@ -260,9 +293,8 @@ const styles = StyleSheet.create({
   map: { flex: 1 },
   filtersContainer: { position: 'absolute', top: 56, left: 0, right: 0, paddingVertical: 10 },
   chip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: 'rgba(255,255,255,0.97)' },
-  chipActive: { backgroundColor: '#5B52F0', borderColor: '#5B52F0' },
-  chipText: { fontSize: 12, fontWeight: '500', color: '#8888bb' },
-  chipTextActive: { color: '#fff' },
+  chipText: { fontSize: 12, fontWeight: '600', color: '#8888bb' },
+  chipTextActive: { color: '#fff', fontWeight: '700' },
   userDot: { width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(91,82,240,0.25)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
   userDotInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#5B52F0' },
   marker: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, elevation: 4 },
@@ -273,22 +305,30 @@ const styles = StyleSheet.create({
   filterBtnActive: { backgroundColor: '#5B52F0', borderColor: '#5B52F0' },
   filterBtnText: { fontSize: 13, fontWeight: '600', color: '#8888bb' },
   filterBtnTextActive: { color: '#fff' },
-  rideCard: { position: 'absolute', bottom: 16, left: 12, right: 12, backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#DDD8FF', shadowColor: '#5B52F0', shadowOpacity: 0.1, shadowRadius: 12, elevation: 6 },
-  closeBtn: { position: 'absolute', top: 6, right: 6, width: 54, height: 54, borderRadius: 32, backgroundColor: '#EEEDFE', alignItems: 'center', justifyContent: 'center' },
-  closeBtnText: { fontSize: 16, color: '#5B52F0', fontWeight: '600' },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  cardIcon: { width: 40, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: '#1a1a2e' },
-  cardSport: { fontSize: 12, color: '#8888bb', marginTop: 1 },
+  // ─── Popup carte ───────────────────────────────────────────────────────────
+  rideCard: {
+    position: 'absolute', bottom: 16, left: 12, right: 12,
+    backgroundColor: '#fff', borderRadius: 18, borderWidth: 1,
+    shadowColor: '#5B52F0', shadowOpacity: 0.12, shadowRadius: 16, elevation: 8,
+    overflow: 'hidden',
+  },
+  rideCardAccent: { height: 4, width: '100%' },
+  rideCardInner: { padding: 14 },
+  closeBtn: { position: 'absolute', top: 10, right: 10, width: 30, height: 30, borderRadius: 15, backgroundColor: '#EEEDFE', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  closeBtnText: { fontSize: 13, color: '#5B52F0', fontWeight: '700' },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  cardIcon: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  cardTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a2e' },
+  cardSport: { fontSize: 11, fontWeight: '600', marginTop: 1 },
   cardStats: { flexDirection: 'row', gap: 16, marginBottom: 8 },
   cardStat: {},
-  cardStatLabel: { fontSize: 11, color: '#8888bb' },
-  cardStatVal: { fontSize: 13, fontWeight: '600', color: '#1a1a2e' },
-  cardMeta: { fontSize: 12, color: '#8888bb', marginBottom: 12 },
+  cardStatLabel: { fontSize: 10, color: '#8888bb' },
+  cardStatVal: { fontSize: 13, fontWeight: '700', marginTop: 1 },
+  cardMeta: { fontSize: 12, color: '#8888bb', marginBottom: 10 },
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   going: { fontSize: 12, color: '#8888bb' },
-  detailBtn: { backgroundColor: '#EEEDFE', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 14 },
-  detailText: { color: '#5B52F0', fontWeight: '600', fontSize: 13 },
-  joinBtn: { backgroundColor: '#5B52F0', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 18 },
-  joinText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+  detailBtn: { backgroundColor: '#EEEDFE', borderRadius: 10, paddingVertical: 7, paddingHorizontal: 14 },
+  detailText: { color: '#5B52F0', fontWeight: '600', fontSize: 12 },
+  joinBtn: { borderRadius: 10, paddingVertical: 7, paddingHorizontal: 16 },
+  joinText: { color: '#fff', fontWeight: '700', fontSize: 12 },
 });
