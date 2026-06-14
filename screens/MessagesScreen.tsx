@@ -339,6 +339,53 @@ export default function MessagesScreen() {
     });
   };
 
+
+  // ─── Quitter la conversation ─────────────────────────────────────────────
+  const leaveConversation = async () => {
+    if (!openChat || !userId) return;
+
+    const isCreator = fullSortie?.createur_id === userId;
+
+    if (isCreator) {
+      Alert.alert(
+        'Créateur de la sortie',
+        "Tu es le créateur de cette sortie. Pour la faire disparaître, il faut plutôt annuler ou supprimer la sortie."
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Quitter la conversation',
+      "Tu ne verras plus cette conversation dans tes messages. Tu pourras la retrouver uniquement si tu rejoins à nouveau la sortie.",
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Quitter',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('participations')
+                .delete()
+                .eq('sortie_id', openChat.id)
+                .eq('user_id', userId);
+
+              if (error) throw error;
+
+              closeChat();
+              await fetchSorties();
+
+              Alert.alert('Conversation quittée', 'Tu as quitté cette conversation.');
+            } catch (error) {
+              console.error('Leave conversation error:', error);
+              Alert.alert('Erreur', "Impossible de quitter la conversation.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // ─── Envoi de média ───────────────────────────────────────────────────────
   const handlePickMedia = () => {
     Alert.alert('Partager un média', 'Que veux-tu envoyer ?', [
@@ -523,11 +570,7 @@ export default function MessagesScreen() {
           keyboardVerticalOffset={10}
         >
           {/* Header chat */}
-          <TouchableOpacity
-            style={styles.chatHeader}
-            onPress={() => setShowRideDetail(true)}
-            activeOpacity={0.8}
-          >
+          <View style={styles.chatHeader}>
             <TouchableOpacity
               style={styles.backBtn}
               onPress={closeChat}
@@ -541,15 +584,27 @@ export default function MessagesScreen() {
               <Text style={styles.chatIconEmoji}>{SPORT_EMOJIS[openChat.sport]}</Text>
             </View>
 
-            <View style={{ flex: 1 }}>
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              onPress={() => setShowRideDetail(true)}
+              activeOpacity={0.8}
+            >
               <Text style={styles.chatTitle} numberOfLines={1}>
                 {openChat.titre}
               </Text>
               <Text style={[styles.chatSub, { color: chatColor }]}>
                 {isSortieTerminee ? '✅ Sortie terminée' : 'Voir la sortie →'}
               </Text>
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.leaveBtn}
+              onPress={leaveConversation}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.leaveBtnText}>Quitter</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Messages */}
           <ScrollView
@@ -863,6 +918,21 @@ const styles = StyleSheet.create({
   chatIconEmoji: { fontSize: 18 },
   chatTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a2e' },
   chatSub: { fontSize: 11, fontWeight: '600', marginTop: 1 },
+  leaveBtn: {
+    height: 34,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FFE4E6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leaveBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#E11D48',
+  },
   messages: { flex: 1 },
   emptyChatWrap: { alignItems: 'center', paddingTop: 40, gap: 8 },
   emptyChatEmoji: { fontSize: 32 },
