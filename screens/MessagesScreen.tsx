@@ -10,6 +10,8 @@ import {
   Platform,
   Image,
   Alert,
+  Modal,
+  Dimensions,
 } from 'react-native';
 
 import * as ImagePicker from 'expo-image-picker';
@@ -124,6 +126,7 @@ type Message = {
   created_at: string;
   media_url?: string | null;
   media_type?: 'image' | 'video' | null;
+  deleted?: boolean;
 };
 
 type Profile = {
@@ -144,6 +147,7 @@ export default function MessagesScreen() {
   const [showProfile, setShowProfile] = useState<string | null>(null);
   const [showRideDetail, setShowRideDetail] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   const fetchUser = async () => {
@@ -339,21 +343,33 @@ export default function MessagesScreen() {
     });
   };
 
+  // ─── Supprimer un message (auteur uniquement) ─────────────────────────────
+  const handleDeleteMessage = (msg: Message) => {
+    Alert.alert('Supprimer ce message', 'Le message sera remplacé par "Message supprimé".', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer',
+        style: 'destructive',
+        onPress: async () => {
+          const { error } = await supabase
+            .from('messages')
+            .update({ deleted: true })
+            .eq('id', msg.id);
+          if (!error) {
+            setMessages(prev =>
+              prev.map(m => m.id === msg.id ? { ...m, deleted: true } : m)
+            );
+          } else {
+            Alert.alert('Erreur', error.message);
+          }
+        },
+      },
+    ]);
+  };
 
-  // ─── Quitter la conversation ─────────────────────────────────────────────
-  const leaveConversation = async () => {
+  // ─── CHANGEMENT 1 : Quitter la conversation (participant uniquement) ───────
+  const handleLeaveConversation = () => {
     if (!openChat || !userId) return;
-
-    const isCreator = fullSortie?.createur_id === userId;
-
-    if (isCreator) {
-      Alert.alert(
-        'Créateur de la sortie',
-        "Tu es le créateur de cette sortie. Pour la faire disparaître, il faut plutôt annuler ou supprimer la sortie."
-      );
-      return;
-    }
-
     Alert.alert(
       'Quitter la conversation',
       "Tu ne verras plus cette conversation dans tes messages. Tu pourras la retrouver uniquement si tu rejoins à nouveau la sortie.",
@@ -380,6 +396,27 @@ export default function MessagesScreen() {
               console.error('Leave conversation error:', error);
               Alert.alert('Erreur', "Impossible de quitter la conversation.");
             }
+          },
+        },
+      ]
+    );
+  };
+
+  // ─── CHANGEMENT 2 : Supprimer la sortie (créateur uniquement) ────────────
+  const handleDeleteSortie = () => {
+    if (!openChat) return;
+    Alert.alert(
+      'Supprimer la sortie',
+      'La sortie et toutes ses conversations seront supprimées définitivement.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            await supabase.from('sorties').delete().eq('id', openChat.id);
+            closeChat();
+            fetchSorties();
           },
         },
       ]
@@ -415,10 +452,7 @@ export default function MessagesScreen() {
     }
 
     const options: ImagePicker.ImagePickerOptions = {
-      mediaTypes:
-        type === 'image'
-          ? ImagePicker.MediaTypeOptions.Images
-          : ImagePicker.MediaTypeOptions.Videos,
+      mediaTypes: type === 'image' ? ['images'] : ['videos'],
       quality: 0.8,
       allowsEditing: false,
       videoMaxDuration: 60,
@@ -440,19 +474,37 @@ export default function MessagesScreen() {
       const fileName = `${openChat.id}/${userId}_${Date.now()}.${ext}`;
       const mimeType = getMimeType(ext, type);
 
-      // IMPORTANT : en React Native, l'upload Blob/FormData avec Supabase peut créer
-      // un fichier inutilisable. On lit donc le fichier local en ArrayBuffer.
-      const localFile = new File(uri);
-      const arrayBuffer = await localFile.arrayBuffer();
+      // Upload via FormData — méthode fiable sur iOS avec Expo
+      const formData = new FormData();
+      formData.append('file', {
+        uri,
+        name: fileName.split('/').pop() || 'media',
+        type: mimeType,
+      } as any);
 
-      const { error: uploadError } = await supabase.storage
-        .from(MEDIA_BUCKET)
-        .upload(fileName, arrayBuffer, {
-          contentType: mimeType,
-          upsert: false,
-        });
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
 
-      if (uploadError) throw uploadError;
+      if (!accessToken) throw new Error('No access token');
+
+      const uploadResponse = await fetch(
+        `https://cabsrxleafmowciqttmb.supabase.co/storage/v1/object/${MEDIA_BUCKET}/${fileName}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'x-upsert': 'true',
+          },
+          body: formData,
+        }
+      );
+
+      if (!uploadResponse.ok) {
+        const errText = await uploadResponse.text();
+        throw new Error(`Upload failed: ${errText}`);
+      }
+
 
       // IMPORTANT : ne construis pas l'URL à la main.
       // Ce code suppose que le bucket ride-media est public.
@@ -533,17 +585,29 @@ export default function MessagesScreen() {
 
   const showMediaOptions = (
     mediaUrl: string,
-    mediaType: 'image' | 'video' | null | undefined
+    mediaType: 'image' | 'video' | null | undefined,
+    msg?: Message
   ) => {
     const safeMediaType: 'image' | 'video' = mediaType === 'video' ? 'video' : 'image';
 
-    Alert.alert('Média', 'Que veux-tu faire ?', [
+    const options: any[] = [
       {
         text: 'Enregistrer dans la galerie',
         onPress: () => downloadMediaToGallery(mediaUrl, safeMediaType),
       },
-      { text: 'Annuler', style: 'cancel' },
-    ]);
+    ];
+
+    if (msg && msg.user_id === userId) {
+      options.push({
+        text: 'Supprimer ce message',
+        style: 'destructive',
+        onPress: () => handleDeleteMessage(msg),
+      });
+    }
+
+    options.push({ text: 'Annuler', style: 'cancel' });
+
+    Alert.alert('Média', 'Que veux-tu faire ?', options);
   };
 
   if (showProfile) {
@@ -561,6 +625,8 @@ export default function MessagesScreen() {
     const isSortieTerminee = openChat.date_sortie
       ? isSortiePassed(openChat.date_sortie)
       : false;
+    // CHANGEMENT 3 : détecter si créateur
+    const isCreateur = fullSortie?.createur_id === userId;
 
     return (
       <SwipeBack onSwipeBack={closeChat}>
@@ -597,13 +663,24 @@ export default function MessagesScreen() {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.leaveBtn}
-              onPress={leaveConversation}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.leaveBtnText}>Quitter</Text>
-            </TouchableOpacity>
+            {/* CHANGEMENT 3 : bouton conditionnel créateur / participant */}
+            {isCreateur ? (
+              <TouchableOpacity
+                style={styles.deleteSortieBtn}
+                onPress={handleDeleteSortie}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.deleteSortieBtnText}>🗑 Supprimer</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.leaveBtn}
+                onPress={handleLeaveConversation}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.leaveBtnText}>Quitter</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Messages */}
@@ -676,16 +753,29 @@ export default function MessagesScreen() {
                     {!isMe && author && <Text style={styles.msgAuthor}>{author.prenom}</Text>}
 
                     {/* Bulle avec média ou texte */}
-                    {msg.media_url && msg.media_type === 'image' ? (
+                    {msg.deleted ? (
+                      <>
+                        <View style={[styles.bubble, styles.bubbleDeleted]}>
+                          <Text style={styles.bubbleTextDeleted}>🚫 Message supprimé</Text>
+                        </View>
+                        <Text style={[styles.msgTime, isMe && { textAlign: 'right' }]}>{time}</Text>
+                      </>
+                    ) : msg.media_url && msg.media_type === 'image' ? (
                       <View style={[styles.mediaBubble, isMe && { alignItems: 'flex-end' }]}>
                         <TouchableOpacity
                           activeOpacity={0.9}
-                          onLongPress={() => showMediaOptions(msg.media_url!, 'image')}
+                          onPress={() => setSelectedImage(msg.media_url!)}
+                          onLongPress={() => isMe
+                            ? showMediaOptions(msg.media_url!, 'image', msg)
+                            : showMediaOptions(msg.media_url!, 'image')
+                          }
                         >
                           <Image
                             source={{ uri: msg.media_url }}
                             style={[styles.mediaImage, isMe && { borderColor: chatColor }]}
                             resizeMode="cover"
+                            fadeDuration={0}
+                            onLoad={() => { if (msg.media_url) Image.prefetch(msg.media_url); }}
                             onError={(e) => {
                               console.log(
                                 'Erreur affichage image:',
@@ -703,7 +793,10 @@ export default function MessagesScreen() {
                       <View style={[styles.mediaBubble, isMe && { alignItems: 'flex-end' }]}>
                         <TouchableOpacity
                           activeOpacity={0.9}
-                          onLongPress={() => showMediaOptions(msg.media_url!, 'video')}
+                          onLongPress={() => isMe
+                            ? showMediaOptions(msg.media_url!, 'video', msg)
+                            : showMediaOptions(msg.media_url!, 'video')
+                          }
                         >
                           <View
                             style={[
@@ -723,21 +816,26 @@ export default function MessagesScreen() {
                       </View>
                     ) : (
                       <>
-                        <View
-                          style={[
-                            styles.bubble,
-                            isMe && {
-                              backgroundColor: chatColor,
-                              borderColor: chatColor,
-                              borderBottomLeftRadius: 14,
-                              borderBottomRightRadius: 4,
-                            },
-                          ]}
+                        <TouchableOpacity
+                          activeOpacity={0.85}
+                          onLongPress={() => isMe && handleDeleteMessage(msg)}
                         >
-                          <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>
-                            {msg.contenu}
-                          </Text>
-                        </View>
+                          <View
+                            style={[
+                              styles.bubble,
+                              isMe && {
+                                backgroundColor: chatColor,
+                                borderColor: chatColor,
+                                borderBottomLeftRadius: 14,
+                                borderBottomRightRadius: 4,
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>
+                              {msg.contenu}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
                         <Text style={[styles.msgTime, isMe && { textAlign: 'right' }]}>
                           {time}
                         </Text>
@@ -780,6 +878,26 @@ export default function MessagesScreen() {
               <Text style={styles.sendText}>↑</Text>
             </TouchableOpacity>
           </View>
+          {/* Lightbox image plein écran */}
+          {selectedImage && (
+            <Modal visible animationType="none" transparent statusBarTranslucent>
+              <TouchableOpacity
+                style={styles.lightboxOverlay}
+                activeOpacity={1}
+                onPress={() => setSelectedImage(null)}
+              >
+                <Image
+                  source={{ uri: selectedImage }}
+                  style={styles.lightboxImage}
+                  resizeMode="contain"
+                  fadeDuration={0}
+                />
+                <TouchableOpacity style={styles.lightboxClose} onPress={() => setSelectedImage(null)}>
+                  <Text style={styles.lightboxCloseText}>✕</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </Modal>
+          )}
         </KeyboardAvoidingView>
       </SwipeBack>
     );
@@ -933,6 +1051,22 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#E11D48',
   },
+  // CHANGEMENT 3 : style bouton supprimer (créateur)
+  deleteSortieBtn: {
+    height: 34,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: '#FFF0F0',
+    borderWidth: 1,
+    borderColor: '#FFDDDD',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteSortieBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#e05c3a',
+  },
   messages: { flex: 1 },
   emptyChatWrap: { alignItems: 'center', paddingTop: 40, gap: 8 },
   emptyChatEmoji: { fontSize: 32 },
@@ -1029,4 +1163,28 @@ const styles = StyleSheet.create({
   },
   sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   sendText: { fontSize: 18, color: '#fff', fontWeight: '700' },
+  bubbleDeleted: { backgroundColor: '#F4F3FF', borderColor: '#E8E6FF' },
+  bubbleTextDeleted: { fontSize: 12, color: '#bbbbdd', fontStyle: 'italic' },
+  lightboxOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lightboxImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height * 0.85,
+  },
+  lightboxClose: {
+    position: 'absolute',
+    top: 56,
+    right: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lightboxCloseText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

@@ -52,7 +52,6 @@ export default function PublicProfileScreen({ userId, onBack }: Props) {
       .select('id, titre, sport, distance, elevation, date_sortie')
       .eq('createur_id', userId)
       .order('created_at', { ascending: false })
-      .limit(5);
     setSorties(data || []);
   };
 

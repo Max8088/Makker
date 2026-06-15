@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
 import { supabase } from '../lib/supabase';
 import SettingsScreen from './SettingsScreen';
+import AdminScreen from './AdminScreen';
 
 const SPORTS = [
   { id: 'route', label: 'Route', emoji: '🚴' },
@@ -55,6 +56,8 @@ export default function ProfileScreen() {
   const [creneaux, setCreneaux] = useState<string[]>(['matin', 'weekend']);
   const [loading, setLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => { fetchProfile(); fetchSorties(); }, []);
 
@@ -62,7 +65,11 @@ export default function ProfileScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-    if (data) { setProfile(data); setSportPrincipal(data.sport_principal || 'route'); }
+    if (data) {
+      setProfile(data);
+      setSportPrincipal(data.sport_principal || 'route');
+      setIsAdmin(data.is_admin === true);
+    }
     setLoading(false);
   };
 
@@ -117,6 +124,10 @@ export default function ProfileScreen() {
     <SettingsScreen onBack={() => { setShowSettings(false); fetchProfile(); }} onLogout={handleLogout} />
   );
 
+  if (showAdmin) return (
+    <AdminScreen onBack={() => setShowAdmin(false)} />
+  );
+
   return (
     <View style={styles.container}>
 
@@ -124,6 +135,11 @@ export default function ProfileScreen() {
       <View style={styles.topBar}>
         <Text style={styles.pageTitle}>Profil</Text>
         <View style={styles.topBarActions}>
+          {isAdmin && (
+            <TouchableOpacity style={styles.adminBtn} onPress={() => setShowAdmin(true)}>
+              <Text style={styles.adminBtnText}>🛡️</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
             <Text style={styles.logoutBtnText}>↪ Déco</Text>
           </TouchableOpacity>
@@ -321,6 +337,8 @@ const styles = StyleSheet.create({
   logoutBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#ffdddd' },
   logoutBtnText: { fontSize: 12, fontWeight: '600', color: '#e05c3a' },
   settingsBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#DDD8FF', alignItems: 'center', justifyContent: 'center' },
+  adminBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' },
+  adminBtnText: { fontSize: 16 },
   profileCard: { backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 18, borderWidth: 1, marginBottom: 14, overflow: 'hidden', shadowColor: '#5B52F0', shadowOpacity: 0.08, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12, elevation: 4 },
   profileCardAccent: { height: 4, width: '100%' },
   profileCardInner: { padding: 20, alignItems: 'center' },
