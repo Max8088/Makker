@@ -3,7 +3,11 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Image, Alert
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { supabase } from '../lib/supabase';
+
+WebBrowser.maybeCompleteAuthSession();
 
 type Mode = 'login' | 'register';
 
@@ -15,6 +19,7 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
   const [prenom, setPrenom] = useState('');
   const [ville, setVille] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -40,7 +45,7 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) {
       setLoading(false);
-      Alert.alert('Erreur d\'inscription', error.message);
+      Alert.alert("Erreur d'inscription", error.message);
       return;
     }
     if (data.user) {
@@ -57,6 +62,76 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
     Alert.alert('Compte créé !', 'Tu peux maintenant te connecter.', [
       { text: 'OK', onPress: () => setMode('login') }
     ]);
+  };
+
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    try {
+      const redirectUrl = 'makker://';
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.url) throw new Error('No URL returned');
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+      if (result.type === 'success' && result.url) {
+        const url = result.url;
+        const params = new URLSearchParams(url.split('#')[1] || url.split('?')[1] || '');
+
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+
+        if (accessToken && refreshToken) {
+          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (sessionError) throw sessionError;
+
+          // Créer le profil si c'est un nouvel utilisateur Google
+          if (sessionData.user) {
+            const { data: existingProfile } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('id', sessionData.user.id)
+              .single();
+
+            if (!existingProfile) {
+              const fullName = sessionData.user.user_metadata?.full_name || '';
+              const nameParts = fullName.split(' ');
+              const prenom = nameParts[0] || '';
+              const nom = nameParts.slice(1).join(' ') || '';
+
+              await supabase.from('profiles').insert({
+                id: sessionData.user.id,
+                prenom,
+                nom,
+                ville: '',
+                sport_principal: 'route',
+                niveau: 'intermediaire',
+                avatar_url: sessionData.user.user_metadata?.avatar_url || null,
+              });
+            }
+
+            onLogin();
+          }
+        }
+      }
+    } catch (e: any) {
+      console.error('Google login error:', e);
+      Alert.alert('Erreur', 'Impossible de se connecter avec Google.');
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
   return (
@@ -181,9 +256,23 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
             <View style={styles.dividerLine} />
           </View>
 
-          <TouchableOpacity style={styles.googleBtn}>
-            <Text style={styles.googleEmoji}>🔵</Text>
-            <Text style={styles.googleText}>Continuer avec Google</Text>
+          <TouchableOpacity
+            style={[styles.googleBtn, googleLoading && { opacity: 0.7 }]}
+            onPress={handleGoogleLogin}
+            disabled={googleLoading}
+            activeOpacity={0.85}
+          >
+            {googleLoading ? (
+              <Text style={styles.googleText}>Connexion en cours...</Text>
+            ) : (
+              <>
+                <Image
+                  source={{ uri: 'https://www.google.com/favicon.ico' }}
+                  style={styles.googleIcon}
+                />
+                <Text style={styles.googleText}>Continuer avec Google</Text>
+              </>
+            )}
           </TouchableOpacity>
 
         </View>
@@ -191,7 +280,7 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
         <Text style={styles.footer}>
           {mode === 'login' ? 'Pas encore de compte ? ' : 'Déjà un compte ? '}
           <Text style={styles.footerLink} onPress={() => setMode(mode === 'login' ? 'register' : 'login')}>
-            {mode === 'login' ? 'S\'inscrire' : 'Se connecter'}
+            {mode === 'login' ? "S'inscrire" : 'Se connecter'}
           </Text>
         </Text>
 
@@ -240,7 +329,7 @@ const styles = StyleSheet.create({
     gap: 10, backgroundColor: '#fff', borderRadius: 12,
     borderWidth: 1.5, borderColor: '#DDD8FF', padding: 13,
   },
-  googleEmoji: { fontSize: 18 },
+  googleIcon: { width: 20, height: 20 },
   googleText: { fontSize: 14, fontWeight: '500', color: '#1a1a2e' },
   footer: { textAlign: 'center', marginTop: 24, fontSize: 13, color: '#aaa' },
   footerLink: { color: '#7B7BAA', fontWeight: '600' },

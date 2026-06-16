@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Image } from 'react-native';
+import { View, Image, ActivityIndicator } from 'react-native';
 import FeedScreen from './screens/FeedScreen';
 import MapScreen from './screens/MapScreen';
 import CreateScreen from './screens/CreateScreen';
 import MessagesScreen from './screens/MessagesScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import AuthScreen from './screens/AuthScreen';
+import { supabase } from './lib/supabase';
 
 const Tab = createBottomTabNavigator();
 
@@ -20,6 +21,36 @@ const ICONS = {
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Vérifie la session existante au démarrage
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsLoggedIn(!!session);
+      setLoading(false);
+    });
+
+    // Écoute les changements d'état d'authentification
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Écran de chargement pendant la vérification de session
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#F4F3FF', alignItems: 'center', justifyContent: 'center' }}>
+        <Image
+          source={require('./assets/logo_makker.png')}
+          style={{ width: 80, height: 80, borderRadius: 20, marginBottom: 20 }}
+          resizeMode="contain"
+        />
+        <ActivityIndicator color="#5B52F0" size="large" />
+      </View>
+    );
+  }
 
   if (!isLoggedIn) return <AuthScreen onLogin={() => setIsLoggedIn(true)} />;
 
@@ -47,10 +78,7 @@ export default function App() {
             return (
               <Image
                 source={icon}
-                style={{
-                  width: 36, height: 36,
-                  opacity: focused ? 1 : 0.5,
-                }}
+                style={{ width: 36, height: 36, opacity: focused ? 1 : 0.5 }}
                 resizeMode="contain"
               />
             );

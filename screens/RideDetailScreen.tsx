@@ -21,10 +21,10 @@ const SPORT_EMOJIS: { [key: string]: string } = {
 const SPORT_LABELS: { [key: string]: string } = {
   route: 'Cyclisme Route', vtt: 'VTT', trail: 'Trail', running: 'Running',
 };
-const NIVEAU_CONFIG: { [key: string]: { color: string; bg: string } } = {
-  facile:        { color: '#2D6A4F', bg: '#F0FDF4' },
-  intermediaire: { color: '#D97706', bg: '#FFFBEB' },
-  difficile:     { color: '#610230', bg: '#F9F0F4' },
+const NIVEAU_CONFIG: { [key: string]: { color: string; bg: string; label: string } } = {
+  facile:        { color: '#2D6A4F', bg: '#F0FDF4', label: 'Facile' },
+  intermediaire: { color: '#D97706', bg: '#FFFBEB', label: 'Intermédiaire' },
+  difficile:     { color: '#610230', bg: '#F9F0F4', label: 'Difficile' },
 };
 
 const isVelo = (sport: string) => sport === 'route' || sport === 'vtt';
@@ -158,7 +158,7 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
                 </View>
                 {niveau && (
                   <View style={[styles.niveauBadge, { backgroundColor: niveau.bg, borderColor: niveau.color + '40' }]}>
-                    <Text style={[styles.niveauText, { color: niveau.color }]}>{sortie.niveau}</Text>
+                    <Text style={[styles.niveauText, { color: niveau.color }]}>{niveau.label}</Text>
                   </View>
                 )}
               </View>

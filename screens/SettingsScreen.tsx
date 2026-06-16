@@ -15,9 +15,9 @@ const SPORTS = [
 ];
 
 const NIVEAUX = [
-  { id: 'debutant', label: 'Débutant', color: '#22c55e' },
+  { id: 'facile', label: 'Facile', color: '#22c55e' },
   { id: 'intermediaire', label: 'Intermédiaire', color: '#f59f00' },
-  { id: 'avance', label: 'Avancé', color: '#e05c3a' },
+  { id: 'difficile', label: 'Difficile', color: '#e05c3a' },
 ];
 
 const CRENEAUX = [
@@ -58,11 +58,11 @@ export default function SettingsScreen({ onBack, onLogout }: { onBack: () => voi
   const handlePickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission refusée', 'Active l\'accès aux photos dans les réglages.');
+      Alert.alert('Permission refusée', "Active l'accès aux photos dans les réglages.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true, aspect: [1, 1], quality: 0.5,
     });
     if (result.canceled) return;
