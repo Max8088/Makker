@@ -17,7 +17,6 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
   const [password, setPassword] = useState('');
   const [nom, setNom] = useState('');
   const [prenom, setPrenom] = useState('');
-  const [ville, setVille] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
@@ -37,7 +36,7 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
   };
 
   const handleRegister = async () => {
-    if (!email || !password || !prenom || !nom || !ville) {
+    if (!email || !password || !prenom || !nom) {
       Alert.alert('Erreur', 'Merci de remplir tous les champs');
       return;
     }
@@ -49,14 +48,25 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
       return;
     }
     if (data.user) {
-      await supabase.from('profiles').insert({
+      const { error: profileError } = await supabase.from('profiles').insert({
         id: data.user.id,
         prenom,
         nom,
-        ville,
+        ville: '',
         sport_principal: 'route',
         niveau: 'intermediaire',
+        onboarding_completed: false,
       });
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+        setLoading(false);
+        Alert.alert(
+          'Erreur',
+          "Le compte a été créé mais le profil n'a pas pu être initialisé. Contacte le support."
+        );
+        return;
+      }
     }
     setLoading(false);
     Alert.alert('Compte créé !', 'Tu peux maintenant te connecter.', [
@@ -119,6 +129,7 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
                 sport_principal: 'route',
                 niveau: 'intermediaire',
                 avatar_url: sessionData.user.user_metadata?.avatar_url || null,
+                onboarding_completed: false,
               });
             }
 
@@ -195,17 +206,6 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
                 </View>
               </View>
 
-              <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Ville</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="ex: Lyon"
-                  placeholderTextColor="#bbbbdd"
-                  value={ville}
-                  onChangeText={setVille}
-                  autoCapitalize="words"
-                />
-              </View>
             </>
           )}
 

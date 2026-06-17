@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Image, ActivityIndicator } from 'react-native';
+import { View, Image, ActivityIndicator, Text } from 'react-native';
 import FeedScreen from './screens/FeedScreen';
 import MapScreen from './screens/MapScreen';
 import CreateScreen from './screens/CreateScreen';
 import MessagesScreen from './screens/MessagesScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import AuthScreen from './screens/AuthScreen';
+import OnboardingScreen from './screens/OnboardingScreen';
 import { supabase } from './lib/supabase';
 
 const Tab = createBottomTabNavigator();
@@ -22,21 +23,96 @@ const ICONS = {
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [unreadConversations, setUnreadConversations] = useState(0);
+
+  const checkOnboarding = async (userId: string) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('onboarding_completed')
+      .eq('id', userId)
+      .single();
+
+    setNeedsOnboarding(data?.onboarding_completed !== true);
+  };
+
+  // ─── Compte le nombre de conversations avec au moins un message non lu ────
+  const checkUnreadConversations = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setUnreadConversations(0); return; }
+
+    const { data: creees } = await supabase
+      .from('sorties')
+      .select('id')
+      .eq('createur_id', user.id);
+
+    const { data: participations } = await supabase
+      .from('participations')
+      .select('sortie_id')
+      .eq('user_id', user.id);
+
+    const createdIds = (creees || []).map(s => s.id);
+    const joinedIds = (participations || []).map(p => p.sortie_id);
+    const allIds = [...new Set([...createdIds, ...joinedIds])];
+
+    if (allIds.length === 0) { setUnreadConversations(0); return; }
+
+    const { data: reads } = await supabase
+      .from('conversation_reads')
+      .select('sortie_id, last_read_at')
+      .eq('user_id', user.id)
+      .in('sortie_id', allIds);
+
+    const readMap: { [id: string]: string } = {};
+    (reads || []).forEach(r => { readMap[r.sortie_id] = r.last_read_at; });
+
+    const { data: messages } = await supabase
+      .from('messages')
+      .select('sortie_id, created_at, user_id')
+      .in('sortie_id', allIds)
+      .eq('deleted', false);
+
+    const unreadSortieIds = new Set<string>();
+    (messages || []).forEach(m => {
+      if (m.user_id === user.id) return;
+      const lastRead = readMap[m.sortie_id];
+      if (!lastRead || new Date(m.created_at) > new Date(lastRead)) {
+        unreadSortieIds.add(m.sortie_id);
+      }
+    });
+
+    setUnreadConversations(unreadSortieIds.size);
+  }, []);
 
   useEffect(() => {
     // Vérifie la session existante au démarrage
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setIsLoggedIn(!!session);
+      if (session?.user) {
+        await checkOnboarding(session.user.id);
+        await checkUnreadConversations();
+      }
       setLoading(false);
     });
 
     // Écoute les changements d'état d'authentification
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setIsLoggedIn(!!session);
+      if (session?.user) {
+        await checkOnboarding(session.user.id);
+        await checkUnreadConversations();
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Rafraîchit le badge périodiquement (toutes les 15s) tant que connecté
+  useEffect(() => {
+    if (!isLoggedIn || needsOnboarding) return;
+    const interval = setInterval(checkUnreadConversations, 15000);
+    return () => clearInterval(interval);
+  }, [isLoggedIn, needsOnboarding, checkUnreadConversations]);
 
   // Écran de chargement pendant la vérification de session
   if (loading) {
@@ -53,6 +129,10 @@ export default function App() {
   }
 
   if (!isLoggedIn) return <AuthScreen onLogin={() => setIsLoggedIn(true)} />;
+
+  if (needsOnboarding) {
+    return <OnboardingScreen onFinish={() => setNeedsOnboarding(false)} />;
+  }
 
   return (
     <NavigationContainer>
@@ -76,11 +156,25 @@ export default function App() {
             if (route.name === 'Create') return null;
             const icon = ICONS[route.name as keyof typeof ICONS];
             return (
-              <Image
-                source={icon}
-                style={{ width: 36, height: 36, opacity: focused ? 1 : 0.5 }}
-                resizeMode="contain"
-              />
+              <View>
+                <Image
+                  source={icon}
+                  style={{ width: 36, height: 36, opacity: focused ? 1 : 0.5 }}
+                  resizeMode="contain"
+                />
+                {route.name === 'Messages' && unreadConversations > 0 && (
+                  <View style={{
+                    position: 'absolute', top: -2, right: -4,
+                    minWidth: 16, height: 16, borderRadius: 8,
+                    backgroundColor: '#e05c3a', alignItems: 'center', justifyContent: 'center',
+                    paddingHorizontal: 3, borderWidth: 1.5, borderColor: '#fff',
+                  }}>
+                    <Text style={{ fontSize: 9, fontWeight: '800', color: '#fff' }}>
+                      {unreadConversations > 9 ? '9+' : unreadConversations}
+                    </Text>
+                  </View>
+                )}
+              </View>
             );
           },
         })}
@@ -111,8 +205,12 @@ export default function App() {
             ),
           }}
         />
-        <Tab.Screen name="Messages" component={MessagesScreen} options={{ tabBarLabel: 'Messages' }} />
-        <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profil' }} />
+        <Tab.Screen name="Messages" options={{ tabBarLabel: 'Messages' }}>
+          {() => <MessagesScreen onConversationsUpdated={checkUnreadConversations} />}
+        </Tab.Screen>
+        <Tab.Screen name="Profile" options={{ tabBarLabel: 'Profil' }}>
+          {() => <ProfileScreen onForceOnboarding={() => setNeedsOnboarding(true)} />}
+        </Tab.Screen>
       </Tab.Navigator>
     </NavigationContainer>
   );

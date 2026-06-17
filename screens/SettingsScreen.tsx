@@ -27,7 +27,7 @@ const CRENEAUX = [
   { id: 'weekend', label: '📅 Weekend' },
 ];
 
-export default function SettingsScreen({ onBack, onLogout }: { onBack: () => void; onLogout: () => void }) {
+export default function SettingsScreen({ onBack, onLogout, onRestartOnboarding }: { onBack: () => void; onLogout: () => void; onRestartOnboarding?: () => void }) {
   const [prenom, setPrenom] = useState('');
   const [nom, setNom] = useState('');
   const [ville, setVille] = useState('');
@@ -197,6 +197,12 @@ export default function SettingsScreen({ onBack, onLogout }: { onBack: () => voi
             <Text style={styles.saveBtnText}>{loading ? 'Enregistrement...' : 'Enregistrer les modifications'}</Text>
           </TouchableOpacity>
 
+          {onRestartOnboarding && (
+            <TouchableOpacity style={styles.onboardingBtn} onPress={onRestartOnboarding}>
+              <Text style={styles.onboardingBtnText}>✨ Compléter mon profil</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
             <Text style={styles.logoutText}>Se déconnecter</Text>
           </TouchableOpacity>
@@ -244,4 +250,6 @@ const styles = StyleSheet.create({
   saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   logoutBtn: { backgroundColor: '#fff', borderRadius: 12, padding: 15, alignItems: 'center', borderWidth: 1.5, borderColor: '#ffdddd' },
   logoutText: { color: '#e05c3a', fontSize: 15, fontWeight: '600' },
+  onboardingBtn: { backgroundColor: '#EEEDFE', borderRadius: 12, padding: 15, alignItems: 'center', borderWidth: 1.5, borderColor: '#DDD8FF' },
+  onboardingBtnText: { color: '#5B52F0', fontSize: 14, fontWeight: '700' },
 });

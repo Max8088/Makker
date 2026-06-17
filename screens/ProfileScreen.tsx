@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import SettingsScreen from './SettingsScreen';
 import AdminScreen from './AdminScreen';
@@ -47,7 +48,7 @@ type Sortie = {
   id: string; titre: string; sport: string; distance: string; elevation: string; date_sortie: string;
 };
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ onForceOnboarding }: { onForceOnboarding?: () => void }) {
   const [activeTab, setActiveTab] = useState('Statistiques');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [sorties, setSorties] = useState<Sortie[]>([]);
@@ -60,6 +61,13 @@ export default function ProfileScreen() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => { fetchProfile(); fetchSorties(); }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchProfile();
+      fetchSorties();
+    }, [])
+  );
 
   const fetchProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -120,8 +128,32 @@ export default function ProfileScreen() {
   const mainBg = SPORT_BG[sportPrincipal] || '#EEEDFE';
   const niveauConf = NIVEAU_CONFIG[profile?.niveau || 'intermediaire'];
 
+  const handleRestartOnboarding = () => {
+    Alert.alert(
+      'Compléter mon profil',
+      'Tu vas revoir les étapes pour compléter ton profil (ville, photo, sport, niveau, créneaux).',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Continuer',
+          onPress: async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+            await supabase.from('profiles').update({ onboarding_completed: false }).eq('id', user.id);
+            setShowSettings(false);
+            onForceOnboarding?.();
+          },
+        },
+      ]
+    );
+  };
+
   if (showSettings) return (
-    <SettingsScreen onBack={() => { setShowSettings(false); fetchProfile(); }} onLogout={handleLogout} />
+    <SettingsScreen
+      onBack={() => { setShowSettings(false); fetchProfile(); }}
+      onLogout={handleLogout}
+      onRestartOnboarding={handleRestartOnboarding}
+    />
   );
 
   if (showAdmin) return (

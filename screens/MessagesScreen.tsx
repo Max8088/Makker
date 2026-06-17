@@ -12,6 +12,7 @@ import {
   Alert,
   Modal,
   Dimensions,
+  Keyboard,
 } from 'react-native';
 
 import * as ImagePicker from 'expo-image-picker';
@@ -47,6 +48,17 @@ const SPORT_EMOJIS: { [key: string]: string } = {
 
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
 const MEDIA_BUCKET = 'ride-media';
+
+// ─── Affiche l'heure seulement si >5min depuis le message précédent du même auteur ─
+const shouldShowTime = (
+  current: { user_id: string; created_at: string },
+  previous: { user_id: string; created_at: string } | undefined
+): boolean => {
+  if (!previous) return true;
+  if (previous.user_id !== current.user_id) return true;
+  const diffMs = new Date(current.created_at).getTime() - new Date(previous.created_at).getTime();
+  return diffMs > 5 * 60 * 1000;
+};
 
 // ─── Helper : est-ce que la sortie est passée ? ───────────────────────────────
 const isSortiePassed = (dateSortie: string): boolean => {
@@ -118,6 +130,12 @@ type SortieLight = {
   date_sortie?: string;
 };
 
+type SortieWithMeta = SortieLight & {
+  unreadCount: number;
+  lastMessageAt: string | null;
+  participantNames: string[];
+};
+
 type Message = {
   id: string;
   sortie_id: string;
@@ -136,8 +154,15 @@ type Profile = {
   avatar_url?: string;
 };
 
-export default function MessagesScreen() {
-  const [sorties, setSorties] = useState<SortieLight[]>([]);
+// ─── Messages "X a rejoint l'aventure" — préfixe technique repérable ─────────
+const JOIN_MESSAGE_PREFIX = '__JOIN__';
+
+type Props = { onConversationsUpdated?: () => void };
+
+export default function MessagesScreen({ onConversationsUpdated }: Props) {
+  const [sorties, setSorties] = useState<SortieWithMeta[]>([]);
+  const [search, setSearch] = useState('');
+  const [showFinishedFolder, setShowFinishedFolder] = useState(false);
   const [openChat, setOpenChat] = useState<SortieLight | null>(null);
   const [fullSortie, setFullSortie] = useState<Sortie | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -149,6 +174,20 @@ export default function MessagesScreen() {
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const knownParticipantIds = useRef<{ [sortieId: string]: Set<string> }>({});
+
+  // ─── Auto-scroll quand le clavier s'ouvre ──────────────────────────────────
+  // keyboardDidShow se déclenche APRÈS la fin de l'animation native du clavier,
+  // donc le ScrollView a déjà sa hauteur finale au moment où on scroll.
+  useEffect(() => {
+    const didShowSub = Keyboard.addListener('keyboardDidShow', () => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    });
+
+    return () => {
+      didShowSub.remove();
+    };
+  }, []);
 
   const fetchUser = async () => {
     const {
@@ -158,6 +197,7 @@ export default function MessagesScreen() {
     if (user) setUserId(user.id);
   };
 
+  // ─── Récupère les sorties + métadonnées (non-lus, dernier message, participants) ─
   const fetchSorties = async () => {
     const {
       data: { user },
@@ -191,7 +231,93 @@ export default function MessagesScreen() {
       rejointes = data || [];
     }
 
-    setSorties([...(creees || []), ...rejointes]);
+    const allSorties: SortieLight[] = [...(creees || []), ...rejointes];
+
+    if (allSorties.length === 0) {
+      setSorties([]);
+      return;
+    }
+
+    const allIds = allSorties.map((s) => s.id);
+
+    // Dernière lecture par conversation
+    const { data: reads } = await supabase
+      .from('conversation_reads')
+      .select('sortie_id, last_read_at')
+      .eq('user_id', user.id)
+      .in('sortie_id', allIds);
+
+    const readMap: { [sortieId: string]: string } = {};
+    (reads || []).forEach((r) => {
+      readMap[r.sortie_id] = r.last_read_at;
+    });
+
+    // Tous les messages de ces conversations (pour compter les non-lus + dernier message)
+    const { data: allMessages } = await supabase
+      .from('messages')
+      .select('sortie_id, created_at, user_id')
+      .in('sortie_id', allIds)
+      .eq('deleted', false)
+      .order('created_at', { ascending: false });
+
+    const metaBySortie: { [sortieId: string]: { unreadCount: number; lastMessageAt: string | null } } = {};
+
+    allIds.forEach((id) => {
+      metaBySortie[id] = { unreadCount: 0, lastMessageAt: null };
+    });
+
+    (allMessages || []).forEach((m) => {
+      const meta = metaBySortie[m.sortie_id];
+      if (!meta) return;
+
+      if (!meta.lastMessageAt) meta.lastMessageAt = m.created_at;
+
+      const lastRead = readMap[m.sortie_id];
+      const isUnread = m.user_id !== user.id && (!lastRead || new Date(m.created_at) > new Date(lastRead));
+      if (isUnread) meta.unreadCount += 1;
+    });
+
+    // Noms des participants pour la recherche
+    const { data: allParticipations } = await supabase
+      .from('participations')
+      .select('sortie_id, user_id')
+      .in('sortie_id', allIds);
+
+    const userIdsBySortie: { [sortieId: string]: string[] } = {};
+    (allParticipations || []).forEach((p) => {
+      if (!userIdsBySortie[p.sortie_id]) userIdsBySortie[p.sortie_id] = [];
+      userIdsBySortie[p.sortie_id].push(p.user_id);
+    });
+
+    const allParticipantIds = [...new Set((allParticipations || []).map((p) => p.user_id))];
+
+    let participantProfiles: { [id: string]: string } = {};
+    if (allParticipantIds.length > 0) {
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, prenom')
+        .in('id', allParticipantIds);
+      (profs || []).forEach((p) => {
+        participantProfiles[p.id] = p.prenom || '';
+      });
+    }
+
+    const merged: SortieWithMeta[] = allSorties.map((s) => ({
+      ...s,
+      unreadCount: metaBySortie[s.id]?.unreadCount || 0,
+      lastMessageAt: metaBySortie[s.id]?.lastMessageAt || null,
+      participantNames: (userIdsBySortie[s.id] || []).map((uid) => participantProfiles[uid] || ''),
+    }));
+
+    // Tri : dernier message en premier (les plus actives en haut)
+    merged.sort((a, b) => {
+      if (!a.lastMessageAt && !b.lastMessageAt) return 0;
+      if (!a.lastMessageAt) return 1;
+      if (!b.lastMessageAt) return -1;
+      return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
+    });
+
+    setSorties(merged);
   };
 
   const fetchFullSortie = async (sortieId: string) => {
@@ -242,7 +368,7 @@ export default function MessagesScreen() {
   ): Promise<boolean> => {
     if (!sortie.date_sortie || !isSortiePassed(sortie.date_sortie)) return false;
 
-    const alreadyExists = msgs.some((m) => m.user_id === SYSTEM_USER_ID);
+    const alreadyExists = msgs.some((m) => m.user_id === SYSTEM_USER_ID && !m.contenu.startsWith(JOIN_MESSAGE_PREFIX));
     if (alreadyExists) return false;
 
     const { error } = await supabase.from('messages').insert({
@@ -253,6 +379,41 @@ export default function MessagesScreen() {
     });
 
     return !error;
+  };
+
+  // ─── Détecte les nouveaux participants et insère "X a rejoint l'aventure" ──
+  const checkAndInsertJoinMessages = async (sortie: SortieLight) => {
+    const { data: participations } = await supabase
+      .from('participations')
+      .select('user_id')
+      .eq('sortie_id', sortie.id);
+
+    const currentIds = new Set((participations || []).map((p) => p.user_id));
+    const known = knownParticipantIds.current[sortie.id];
+
+    if (!known) {
+      // Première ouverture : on mémorise sans rien insérer
+      knownParticipantIds.current[sortie.id] = currentIds;
+      return;
+    }
+
+    const newcomers = [...currentIds].filter((id) => !known.has(id));
+    knownParticipantIds.current[sortie.id] = currentIds;
+
+    if (newcomers.length === 0) return;
+
+    const { data: newProfiles } = await supabase
+      .from('profiles')
+      .select('id, prenom')
+      .in('id', newcomers);
+
+    for (const p of newProfiles || []) {
+      await supabase.from('messages').insert({
+        sortie_id: sortie.id,
+        user_id: SYSTEM_USER_ID,
+        contenu: `${JOIN_MESSAGE_PREFIX}${p.prenom} a rejoint l'aventure ! 🏁`,
+      });
+    }
   };
 
   const fetchMessages = async (sortie: SortieLight) => {
@@ -282,16 +443,37 @@ export default function MessagesScreen() {
         loadProfiles(data);
       }
 
+      // Initialise le suivi des participants connus pour cette conversation
+      const { data: participations } = await supabase
+        .from('participations')
+        .select('user_id')
+        .eq('sortie_id', sortie.id);
+      knownParticipantIds.current[sortie.id] = new Set((participations || []).map((p) => p.user_id));
+
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 200);
     }
   };
 
+  // ─── Marque la conversation comme lue (upsert dans conversation_reads) ─────
+  const markAsRead = async (sortieId: string) => {
+    if (!userId) return;
+    await supabase
+      .from('conversation_reads')
+      .upsert(
+        { sortie_id: sortieId, user_id: userId, last_read_at: new Date().toISOString() },
+        { onConflict: 'sortie_id,user_id' }
+      );
+  };
+
   const closeChat = () => {
+    if (openChat) markAsRead(openChat.id);
     setOpenChat(null);
     setFullSortie(null);
     setMessages([]);
     setShowRideDetail(false);
     supabase.getChannels().forEach((c) => supabase.removeChannel(c));
+    fetchSorties();
+    onConversationsUpdated?.();
   };
 
   const openChatWith = (sortie: SortieLight) => {
@@ -299,6 +481,7 @@ export default function MessagesScreen() {
     setMessages([]);
     fetchMessages(sortie);
     fetchFullSortie(sortie.id);
+    markAsRead(sortie.id);
 
     const channelName = `room-${sortie.id}`;
     const existing = supabase
@@ -320,11 +503,27 @@ export default function MessagesScreen() {
         (payload) => {
           const newMsg = payload.new as Message;
           setMessages((prev) => {
+            // Évite les doublons : si le message existe déjà (optimistic update
+            // déjà remplacé, ou même utilisateur ayant déjà reçu sa propre insertion)
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
             const updated = [...prev, newMsg];
             loadProfiles(updated);
             return updated;
           });
+          markAsRead(sortie.id);
           setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'participations',
+          filter: `sortie_id=eq.${sortie.id}`,
+        },
+        () => {
+          checkAndInsertJoinMessages(sortie);
         }
       )
       .subscribe();
@@ -336,11 +535,46 @@ export default function MessagesScreen() {
     const contenu = newMessage.trim();
     setNewMessage('');
 
-    await supabase.from('messages').insert({
+    // Optimistic update : affiche le message immédiatement, sans attendre
+    // la confirmation serveur ni le retour du canal Realtime.
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg: Message = {
+      id: tempId,
       sortie_id: openChat.id,
       user_id: userId,
       contenu,
-    });
+      created_at: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+
+    const { data: inserted, error } = await supabase
+      .from('messages')
+      .insert({
+        sortie_id: openChat.id,
+        user_id: userId,
+        contenu,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Send message error:', error);
+      // Retire le message optimiste en cas d'échec
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      Alert.alert('Erreur', "Le message n'a pas pu être envoyé.");
+      return;
+    }
+
+    // Remplace le message temporaire par la vraie ligne (avec le bon id)
+    if (inserted) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? (inserted as Message) : m))
+      );
+    }
+
+    markAsRead(openChat.id);
   };
 
   // ─── Supprimer un message (auteur uniquement) ─────────────────────────────
@@ -367,7 +601,7 @@ export default function MessagesScreen() {
     ]);
   };
 
-  // ─── CHANGEMENT 1 : Quitter la conversation (participant uniquement) ───────
+  // ─── Quitter la conversation (participant uniquement) ─────────────────────
   const handleLeaveConversation = () => {
     if (!openChat || !userId) return;
     Alert.alert(
@@ -402,7 +636,7 @@ export default function MessagesScreen() {
     );
   };
 
-  // ─── CHANGEMENT 2 : Supprimer la sortie (créateur uniquement) ────────────
+  // ─── Supprimer la sortie (créateur uniquement) ────────────────────────────
   const handleDeleteSortie = () => {
     if (!openChat) return;
     Alert.alert(
@@ -436,7 +670,6 @@ export default function MessagesScreen() {
   const pickMedia = async (type: 'image' | 'video', source: 'library' | 'camera') => {
     if (!openChat || !userId) return;
 
-    // Permissions
     if (source === 'camera') {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
@@ -474,7 +707,6 @@ export default function MessagesScreen() {
       const fileName = `${openChat.id}/${userId}_${Date.now()}.${ext}`;
       const mimeType = getMimeType(ext, type);
 
-      // Upload via FormData — méthode fiable sur iOS avec Expo
       const formData = new FormData();
       formData.append('file', {
         uri,
@@ -482,7 +714,6 @@ export default function MessagesScreen() {
         type: mimeType,
       } as any);
 
-      const { data: { user: authUser } } = await supabase.auth.getUser();
       const { data: { session } } = await supabase.auth.getSession();
       const accessToken = session?.access_token;
 
@@ -505,9 +736,6 @@ export default function MessagesScreen() {
         throw new Error(`Upload failed: ${errText}`);
       }
 
-
-      // IMPORTANT : ne construis pas l'URL à la main.
-      // Ce code suppose que le bucket ride-media est public.
       const { data: publicUrlData } = supabase.storage
         .from(MEDIA_BUCKET)
         .getPublicUrl(fileName);
@@ -523,6 +751,8 @@ export default function MessagesScreen() {
       });
 
       if (insertError) throw insertError;
+
+      markAsRead(openChat.id);
     } catch (e) {
       console.error('Upload error:', e);
       Alert.alert('Erreur', "Impossible d'envoyer le fichier.");
@@ -537,10 +767,8 @@ export default function MessagesScreen() {
     mediaType: 'image' | 'video' = 'image'
   ) => {
     try {
-      console.log('Download media URL:', mediaUrl);
-  
       const { status } = await MediaLibrary.requestPermissionsAsync();
-  
+
       if (status !== 'granted') {
         Alert.alert(
           'Permission refusée',
@@ -548,29 +776,23 @@ export default function MessagesScreen() {
         );
         return;
       }
-  
+
       const cleanUrl = mediaUrl.split('?')[0];
-  
       const rawExt = cleanUrl.split('.').pop()?.toLowerCase();
-  
+
       const validExt =
         rawExt && ['jpg', 'jpeg', 'png', 'webp', 'mp4', 'mov'].includes(rawExt)
           ? rawExt
           : mediaType === 'video'
             ? 'mp4'
             : 'jpg';
-  
+
       const localFileName = `makker_${Date.now()}.${validExt}`;
-  
       const destinationFile = new File(Paths.cache, localFileName);
-  
-      const downloadedFile = await File.downloadFileAsync(
-        mediaUrl,
-        destinationFile
-      );
-  
+      const downloadedFile = await File.downloadFileAsync(mediaUrl, destinationFile);
+
       await MediaLibrary.createAssetAsync(downloadedFile.uri);
-  
+
       Alert.alert(
         mediaType === 'video' ? 'Vidéo enregistrée' : 'Photo enregistrée',
         mediaType === 'video'
@@ -625,15 +847,14 @@ export default function MessagesScreen() {
     const isSortieTerminee = openChat.date_sortie
       ? isSortiePassed(openChat.date_sortie)
       : false;
-    // CHANGEMENT 3 : détecter si créateur
     const isCreateur = fullSortie?.createur_id === userId;
 
     return (
       <SwipeBack onSwipeBack={closeChat}>
         <KeyboardAvoidingView
-          style={styles.container}
+          style={styles.chatContainer}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={10}
+          keyboardVerticalOffset={0}
         >
           {/* Header chat */}
           <View style={styles.chatHeader}>
@@ -663,7 +884,6 @@ export default function MessagesScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* CHANGEMENT 3 : bouton conditionnel créateur / participant */}
             {isCreateur ? (
               <TouchableOpacity
                 style={styles.deleteSortieBtn}
@@ -697,8 +917,23 @@ export default function MessagesScreen() {
               </View>
             )}
 
-            {messages.map((msg) => {
-              // ─── Message système ────────────────────────────────────────
+            {messages.map((msg, index) => {
+              const previousMsg = messages[index - 1];
+              const showTime = shouldShowTime(msg, previousMsg);
+
+              // ─── Message système "X a rejoint l'aventure" ─────────────────
+              if (msg.user_id === SYSTEM_USER_ID && msg.contenu.startsWith(JOIN_MESSAGE_PREFIX)) {
+                const joinText = msg.contenu.replace(JOIN_MESSAGE_PREFIX, '');
+                return (
+                  <View key={msg.id} style={styles.joinMsgWrap}>
+                    <View style={styles.joinMsgPill}>
+                      <Text style={styles.joinMsgText}>{joinText}</Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              // ─── Message système fin de sortie ──────────────────────────
               if (msg.user_id === SYSTEM_USER_ID) {
                 return (
                   <View key={msg.id} style={styles.systemMsgWrap}>
@@ -720,10 +955,12 @@ export default function MessagesScreen() {
               }
 
               const isMe = msg.user_id === userId;
-              const time = new Date(msg.created_at).toLocaleTimeString('fr-FR', {
-                hour: '2-digit',
-                minute: '2-digit',
-              });
+              const time = showTime
+                ? new Date(msg.created_at).toLocaleTimeString('fr-FR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                : '';
               const author = profiles[msg.user_id];
               const initiales = author
                 ? `${author.prenom?.[0] || ''}${author.nom?.[0] || ''}`.toUpperCase()
@@ -752,13 +989,14 @@ export default function MessagesScreen() {
                   <View style={styles.msgCol}>
                     {!isMe && author && <Text style={styles.msgAuthor}>{author.prenom}</Text>}
 
-                    {/* Bulle avec média ou texte */}
                     {msg.deleted ? (
                       <>
                         <View style={[styles.bubble, styles.bubbleDeleted]}>
                           <Text style={styles.bubbleTextDeleted}>🚫 Message supprimé</Text>
                         </View>
-                        <Text style={[styles.msgTime, isMe && { textAlign: 'right' }]}>{time}</Text>
+                        {time && (
+                          <Text style={[styles.msgTime, isMe && { textAlign: 'right' }]}>{time}</Text>
+                        )}
                       </>
                     ) : msg.media_url && msg.media_type === 'image' ? (
                       <View style={[styles.mediaBubble, isMe && { alignItems: 'flex-end' }]}>
@@ -785,9 +1023,11 @@ export default function MessagesScreen() {
                             }}
                           />
                         </TouchableOpacity>
-                        <Text style={[styles.msgTime, isMe && { textAlign: 'right' }]}>
-                          {time}
-                        </Text>
+                        {time && (
+                          <Text style={[styles.msgTime, isMe && { textAlign: 'right' }]}>
+                            {time}
+                          </Text>
+                        )}
                       </View>
                     ) : msg.media_url && msg.media_type === 'video' ? (
                       <View style={[styles.mediaBubble, isMe && { alignItems: 'flex-end' }]}>
@@ -810,9 +1050,11 @@ export default function MessagesScreen() {
                             </Text>
                           </View>
                         </TouchableOpacity>
-                        <Text style={[styles.msgTime, isMe && { textAlign: 'right' }]}>
-                          {time}
-                        </Text>
+                        {time && (
+                          <Text style={[styles.msgTime, isMe && { textAlign: 'right' }]}>
+                            {time}
+                          </Text>
+                        )}
                       </View>
                     ) : (
                       <>
@@ -836,9 +1078,11 @@ export default function MessagesScreen() {
                             </Text>
                           </View>
                         </TouchableOpacity>
-                        <Text style={[styles.msgTime, isMe && { textAlign: 'right' }]}>
-                          {time}
-                        </Text>
+                        {time && (
+                          <Text style={[styles.msgTime, isMe && { textAlign: 'right' }]}>
+                            {time}
+                          </Text>
+                        )}
                       </>
                     )}
                   </View>
@@ -849,7 +1093,6 @@ export default function MessagesScreen() {
 
           {/* Input */}
           <View style={styles.inputBar}>
-            {/* Bouton média */}
             <TouchableOpacity
               style={[
                 styles.mediaBtn,
@@ -878,7 +1121,7 @@ export default function MessagesScreen() {
               <Text style={styles.sendText}>↑</Text>
             </TouchableOpacity>
           </View>
-          {/* Lightbox image plein écran */}
+
           {selectedImage && (
             <Modal visible animationType="none" transparent statusBarTranslucent>
               <TouchableOpacity
@@ -904,6 +1147,65 @@ export default function MessagesScreen() {
   }
 
   // ── Liste des conversations ────────────────────────────────────────────────
+  const searchLower = search.trim().toLowerCase();
+
+  const matchesSearch = (s: SortieWithMeta) => {
+    if (!searchLower) return true;
+    if (s.titre.toLowerCase().includes(searchLower)) return true;
+    return s.participantNames.some((n) => n.toLowerCase().includes(searchLower));
+  };
+
+  const activeSorties = sorties.filter(
+    (s) => !(s.date_sortie && isSortiePassed(s.date_sortie)) && matchesSearch(s)
+  );
+  const finishedSorties = sorties.filter(
+    (s) => s.date_sortie && isSortiePassed(s.date_sortie) && matchesSearch(s)
+  );
+
+  const renderConvItem = (sortie: SortieWithMeta) => {
+    const color = SPORT_COLORS[sortie.sport] || '#5B52F0';
+    const bg = SPORT_BG[sortie.sport] || '#EEEDFE';
+    const passed = sortie.date_sortie ? isSortiePassed(sortie.date_sortie) : false;
+    const hasUnread = sortie.unreadCount > 0;
+
+    return (
+      <TouchableOpacity
+        key={sortie.id}
+        style={[styles.convItem, hasUnread && styles.convItemUnread]}
+        onPress={() => openChatWith(sortie)}
+        activeOpacity={0.88}
+      >
+        <View style={[styles.convAccent, { backgroundColor: color }]} />
+        <View style={[styles.convIconWrap, { backgroundColor: bg }]}>
+          <Text style={styles.convEmoji}>{SPORT_EMOJIS[sortie.sport]}</Text>
+        </View>
+
+        <View style={styles.convInfo}>
+          <Text style={[styles.convName, hasUnread && styles.convNameUnread]} numberOfLines={1}>
+            {sortie.titre}
+          </Text>
+          <Text style={[styles.convSport, { color }]}>
+            {passed
+              ? '✅ Sortie terminée'
+              : sortie.sport.charAt(0).toUpperCase() + sortie.sport.slice(1)}
+          </Text>
+        </View>
+
+        {hasUnread && (
+          <View style={styles.unreadBadge}>
+            <Text style={styles.unreadBadgeText}>
+              {sortie.unreadCount > 9 ? '9+' : sortie.unreadCount}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.convChevronWrap}>
+          <Text style={[styles.convChevron, { color }]}>›</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -911,7 +1213,23 @@ export default function MessagesScreen() {
         <Text style={styles.subtitle}>Tes groupes de sortie</Text>
       </View>
 
-      <ScrollView style={styles.list} contentContainerStyle={{ padding: 16, gap: 10 }}>
+      <View style={styles.searchWrap}>
+        <Text style={styles.searchIcon}>🔍</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Rechercher une sortie ou un participant..."
+          placeholderTextColor="#bbbbdd"
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch('')}>
+            <Text style={styles.searchClear}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <ScrollView style={styles.list} contentContainerStyle={{ padding: 16, paddingTop: 8, gap: 10 }}>
         {sorties.length === 0 ? (
           <View style={styles.emptyWrap}>
             <Text style={styles.emptyEmoji}>💬</Text>
@@ -919,40 +1237,27 @@ export default function MessagesScreen() {
             <Text style={styles.emptySub}>Rejoins ou crée une sortie pour discuter !</Text>
           </View>
         ) : (
-          sorties.map((sortie) => {
-            const color = SPORT_COLORS[sortie.sport] || '#5B52F0';
-            const bg = SPORT_BG[sortie.sport] || '#EEEDFE';
-            const passed = sortie.date_sortie ? isSortiePassed(sortie.date_sortie) : false;
+          <>
+            {activeSorties.map(renderConvItem)}
 
-            return (
-              <TouchableOpacity
-                key={sortie.id}
-                style={styles.convItem}
-                onPress={() => openChatWith(sortie)}
-                activeOpacity={0.88}
-              >
-                <View style={[styles.convAccent, { backgroundColor: color }]} />
-                <View style={[styles.convIconWrap, { backgroundColor: bg }]}>
-                  <Text style={styles.convEmoji}>{SPORT_EMOJIS[sortie.sport]}</Text>
-                </View>
+            {activeSorties.length === 0 && searchLower && (
+              <Text style={styles.noResultText}>Aucun résultat pour "{search}"</Text>
+            )}
 
-                <View style={styles.convInfo}>
-                  <Text style={styles.convName} numberOfLines={1}>
-                    {sortie.titre}
-                  </Text>
-                  <Text style={[styles.convSport, { color }]}>
-                    {passed
-                      ? '✅ Sortie terminée'
-                      : sortie.sport.charAt(0).toUpperCase() + sortie.sport.slice(1)}
+            {finishedSorties.length > 0 && (
+              <View style={styles.finishedFolder}>
+                <View style={styles.finishedFolderHeader}>
+                  <Text style={styles.finishedFolderIcon}>📁</Text>
+                  <Text style={styles.finishedFolderTitle}>
+                    Sorties terminées ({finishedSorties.length})
                   </Text>
                 </View>
-
-                <View style={styles.convChevronWrap}>
-                  <Text style={[styles.convChevron, { color }]}>›</Text>
+                <View style={{ gap: 10 }}>
+                  {finishedSorties.map(renderConvItem)}
                 </View>
-              </TouchableOpacity>
-            );
-          })
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
     </View>
@@ -961,14 +1266,29 @@ export default function MessagesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F3FF', paddingTop: 56 },
-  header: { paddingHorizontal: 20, marginBottom: 16 },
+  chatContainer: { flex: 1, backgroundColor: '#F4F3FF' },
+  header: { paddingHorizontal: 20, marginBottom: 12 },
   title: { fontSize: 30, fontWeight: '900', color: '#1a1a2e', letterSpacing: 0.5 },
   subtitle: { fontSize: 13, color: '#8888bb', marginTop: 2 },
+
+  searchWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: 20, marginBottom: 12,
+    backgroundColor: '#fff', borderRadius: 12,
+    borderWidth: 1.5, borderColor: '#DDD8FF',
+    paddingHorizontal: 12, paddingVertical: 10,
+  },
+  searchIcon: { fontSize: 14 },
+  searchInput: { flex: 1, fontSize: 13, color: '#1a1a2e' },
+  searchClear: { fontSize: 14, color: '#8888bb', paddingHorizontal: 4 },
+
   list: { flex: 1 },
   emptyWrap: { alignItems: 'center', justifyContent: 'center', paddingTop: 60, gap: 8 },
   emptyEmoji: { fontSize: 40, marginBottom: 4 },
   emptyText: { fontSize: 16, fontWeight: '700', color: '#8888bb' },
   emptySub: { fontSize: 13, color: '#bbbbdd', textAlign: 'center', paddingHorizontal: 32 },
+  noResultText: { fontSize: 13, color: '#8888bb', textAlign: 'center', paddingTop: 20 },
+
   convItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -983,6 +1303,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
+  convItemUnread: {
+    borderColor: '#5B52F0',
+    borderWidth: 1.5,
+  },
   convAccent: { width: 4, alignSelf: 'stretch' },
   convIconWrap: {
     width: 46,
@@ -996,15 +1320,29 @@ const styles = StyleSheet.create({
   convEmoji: { fontSize: 22 },
   convInfo: { flex: 1, paddingHorizontal: 12, paddingVertical: 14 },
   convName: { fontSize: 14, fontWeight: '700', color: '#1a1a2e', marginBottom: 3 },
+  convNameUnread: { fontWeight: '800' },
   convSport: { fontSize: 11, fontWeight: '600' },
+  unreadBadge: {
+    minWidth: 22, height: 22, borderRadius: 11,
+    backgroundColor: '#e05c3a', alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 6, marginRight: 8,
+  },
+  unreadBadgeText: { fontSize: 11, fontWeight: '800', color: '#fff' },
   convChevronWrap: { paddingRight: 14 },
   convChevron: { fontSize: 24, fontWeight: '300' },
+
+  finishedFolder: { marginTop: 8, gap: 10 },
+  finishedFolderHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4, marginBottom: 2 },
+  finishedFolderIcon: { fontSize: 15 },
+  finishedFolderTitle: { fontSize: 13, fontWeight: '700', color: '#8888bb' },
+
   chatHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingTop: 56,
+    paddingBottom: 14,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#EEEDFE',
@@ -1051,7 +1389,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#E11D48',
   },
-  // CHANGEMENT 3 : style bouton supprimer (créateur)
   deleteSortieBtn: {
     height: 34,
     paddingHorizontal: 10,
@@ -1072,7 +1409,18 @@ const styles = StyleSheet.create({
   emptyChatEmoji: { fontSize: 32 },
   emptyChat: { textAlign: 'center', color: '#8888bb', fontSize: 13, fontWeight: '500' },
 
-  // ─── Message système ──────────────────────────────────────────────────────
+  // ─── Message "X a rejoint l'aventure" ───────────────────────────────────
+  joinMsgWrap: { alignItems: 'center', marginVertical: 4 },
+  joinMsgPill: {
+    backgroundColor: '#EEEDFE',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: '#DDD8FF',
+  },
+  joinMsgText: { fontSize: 12, fontWeight: '700', color: '#5B52F0' },
+
   systemMsgWrap: { alignItems: 'center', marginVertical: 8 },
   systemMsg: {
     borderRadius: 14,
@@ -1085,7 +1433,6 @@ const styles = StyleSheet.create({
   systemMsgText: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
   systemMsgSub: { fontSize: 11, textAlign: 'center' },
 
-  // ─── Messages ─────────────────────────────────────────────────────────────
   msgRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-end', marginBottom: 6 },
   msgRowMe: { flexDirection: 'row-reverse' },
   msgAvatarWrap: { flexShrink: 0 },
@@ -1106,7 +1453,6 @@ const styles = StyleSheet.create({
   bubbleTextMe: { color: '#fff' },
   msgTime: { fontSize: 10, color: '#bbbbdd', marginTop: 3 },
 
-  // ─── Médias ───────────────────────────────────────────────────────────────
   mediaBubble: { gap: 3 },
   mediaImage: {
     width: 210,
@@ -1130,7 +1476,6 @@ const styles = StyleSheet.create({
   videoIcon: { fontSize: 20 },
   videoText: { fontSize: 13, fontWeight: '600', color: '#1a1a2e' },
 
-  // ─── Input ────────────────────────────────────────────────────────────────
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
