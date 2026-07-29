@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Image, Alert
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { supabase } from '../lib/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -19,6 +20,12 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
   const [prenom, setPrenom] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -72,6 +79,53 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
     Alert.alert('Compte créé !', 'Tu peux maintenant te connecter.', [
       { text: 'OK', onPress: () => setMode('login') }
     ]);
+  };
+
+  const handleAppleLogin = async () => {
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (!credential.identityToken) throw new Error('Aucun token renvoyé par Apple');
+
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', data.user.id)
+          .single();
+
+        if (!existingProfile) {
+          // Apple ne transmet le nom qu'à la toute première connexion
+          await supabase.from('profiles').insert({
+            id: data.user.id,
+            prenom: credential.fullName?.givenName || '',
+            nom: credential.fullName?.familyName || '',
+            ville: '',
+            sport_principal: 'route',
+            niveau: 'intermediaire',
+            onboarding_completed: false,
+          });
+        }
+
+        onLogin();
+      }
+    } catch (e: any) {
+      if (e.code === 'ERR_REQUEST_CANCELED') return;
+      console.error('Apple login error:', e);
+      Alert.alert('Erreur', 'Impossible de se connecter avec Apple.');
+    }
   };
 
   const handleGoogleLogin = async () => {
@@ -256,6 +310,16 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
             <View style={styles.dividerLine} />
           </View>
 
+          {appleAvailable && (
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+              cornerRadius={12}
+              style={styles.appleBtn}
+              onPress={handleAppleLogin}
+            />
+          )}
+
           <TouchableOpacity
             style={[styles.googleBtn, googleLoading && { opacity: 0.7 }]}
             onPress={handleGoogleLogin}
@@ -324,6 +388,7 @@ const styles = StyleSheet.create({
   divider: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   dividerLine: { flex: 1, height: 1, backgroundColor: '#e0dcff' },
   dividerText: { fontSize: 12, color: '#aaa' },
+  appleBtn: { width: '100%', height: 48 },
   googleBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 10, backgroundColor: '#fff', borderRadius: 12,

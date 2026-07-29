@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "makker",
+    "name": "Makker",
     "slug": "makker",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,15 +14,23 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.makker.app"
+      "supportsTablet": false,
+      "bundleIdentifier": "com.maximegilardone.makker",
+      "buildNumber": "1",
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Makker utilise ta position pour te montrer les sorties près de chez toi.",
+        "NSPhotoLibraryUsageDescription": "Makker accède à tes photos pour que tu puisses choisir ta photo de profil.",
+        "NSCameraUsageDescription": "Makker accède à l'appareil photo pour que tu puisses prendre ta photo de profil."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.makker.app",
+      "package": "com.maximegilardone.makker",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
@@ -31,7 +39,13 @@
     },
     "plugins": [
       "expo-secure-store",
+      "expo-apple-authentication",
       "@react-native-community/datetimepicker"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "abf373d8-d38f-4209-bc76-619462422315"
+      }
+    }
   }
 }
