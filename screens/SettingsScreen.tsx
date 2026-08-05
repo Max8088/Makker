@@ -111,6 +111,55 @@ export default function SettingsScreen({ onBack, onLogout, onRestartOnboarding }
     ]);
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Supprimer mon compte',
+      'Cette action est définitive. Ton profil, tes sorties et tes messages seront supprimés et ne pourront pas être récupérés.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Es-tu vraiment sûr ?',
+              "Il n'y a pas de retour en arrière possible.",
+              [
+                { text: 'Annuler', style: 'cancel' },
+                {
+                  text: 'Supprimer définitivement',
+                  style: 'destructive',
+                  onPress: confirmDeleteAccount,
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const confirmDeleteAccount = async () => {
+    setLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Session introuvable');
+
+      const { error } = await supabase.functions.invoke('delete-account', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (error) throw error;
+
+      await supabase.auth.signOut();
+      Alert.alert('Compte supprimé', 'Ton compte a bien été supprimé.');
+      onLogout();
+    } catch (e) {
+      setLoading(false);
+      Alert.alert('Erreur', "La suppression n'a pas pu aboutir. Réessaie ou contacte le support.");
+    }
+  };
+
   return (
     <SwipeBack onSwipeBack={onBack}>
       <View style={styles.container}>
@@ -207,6 +256,10 @@ export default function SettingsScreen({ onBack, onLogout, onRestartOnboarding }
             <Text style={styles.logoutText}>Se déconnecter</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteAccount}>
+            <Text style={styles.deleteText}>Supprimer mon compte</Text>
+          </TouchableOpacity>
+
         </ScrollView>
       </View>
     </SwipeBack>
@@ -252,4 +305,6 @@ const styles = StyleSheet.create({
   logoutText: { color: '#e05c3a', fontSize: 15, fontWeight: '600' },
   onboardingBtn: { backgroundColor: '#EEEDFE', borderRadius: 12, padding: 15, alignItems: 'center', borderWidth: 1.5, borderColor: '#DDD8FF' },
   onboardingBtnText: { color: '#5B52F0', fontSize: 14, fontWeight: '700' },
+  deleteBtn: { alignItems: 'center', padding: 15 },
+  deleteText: { color: '#e05c3a', fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
 });

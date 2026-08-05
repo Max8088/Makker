@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
 import SwipeBack from '../components/SwipeBack';
 
@@ -37,10 +37,14 @@ export default function PublicProfileScreen({ userId, onBack }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [sorties, setSorties] = useState<Sortie[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [isOwnProfile, setIsOwnProfile] = useState(false);
 
-  useEffect(() => { fetchProfile(); fetchSorties(); }, []);
+  useEffect(() => { fetchProfile(); fetchSorties(); checkIfBlocked(); }, []);
 
   const fetchProfile = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    setIsOwnProfile(user?.id === userId);
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (data) setProfile(data);
     setLoading(false);
@@ -53,6 +57,72 @@ export default function PublicProfileScreen({ userId, onBack }: Props) {
       .eq('createur_id', userId)
       .order('created_at', { ascending: false })
     setSorties(data || []);
+  };
+
+  const checkIfBlocked = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from('blocked_users')
+      .select('id')
+      .eq('blocker_id', user.id)
+      .eq('blocked_id', userId)
+      .maybeSingle();
+    setIsBlocked(!!data);
+  };
+
+  const handleToggleBlock = () => {
+    if (isBlocked) {
+      Alert.alert(
+        'Débloquer',
+        `Débloquer ${profile?.prenom} ? Cette personne pourra à nouveau te contacter et voir ton contenu.`,
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { text: 'Débloquer', onPress: confirmUnblock },
+        ]
+      );
+    } else {
+      Alert.alert(
+        'Bloquer cet utilisateur',
+        `${profile?.prenom} ne pourra plus t'envoyer de messages et son contenu ne s'affichera plus dans ton fil.`,
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { text: 'Bloquer', style: 'destructive', onPress: confirmBlock },
+        ]
+      );
+    }
+  };
+
+  const confirmBlock = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { error } = await supabase
+      .from('blocked_users')
+      .insert({ blocker_id: user.id, blocked_id: userId });
+    if (error) {
+      Alert.alert('Erreur', "Impossible de bloquer cet utilisateur.");
+      return;
+    }
+    setIsBlocked(true);
+    Alert.alert('Utilisateur bloqué', `${profile?.prenom} a été bloqué.`, [
+      { text: 'OK', onPress: onBack },
+    ]);
+  };
+
+  const confirmUnblock = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { error } = await supabase
+      .from('blocked_users')
+      .delete()
+      .eq('blocker_id', user.id)
+      .eq('blocked_id', userId);
+    if (error) {
+      Alert.alert('Erreur', "Impossible de débloquer cet utilisateur.");
+      return;
+    }
+    setIsBlocked(false);
+    Alert.alert('Utilisateur débloqué', '');
   };
 
   const initiales = profile
@@ -184,6 +254,17 @@ export default function PublicProfileScreen({ userId, onBack }: Props) {
             )}
           </View>
 
+          {/* ─── Modération ───────────────────────────────────────────── */}
+          {!isOwnProfile && (
+            <View style={styles.section}>
+              <TouchableOpacity style={styles.blockBtn} onPress={handleToggleBlock}>
+                <Text style={styles.blockText}>
+                  {isBlocked ? '✅ Débloquer cet utilisateur' : '🚫 Bloquer cet utilisateur'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
         </ScrollView>
       </View>
     </SwipeBack>
@@ -245,4 +326,8 @@ const styles = StyleSheet.create({
   rideDate: { fontSize: 11, color: '#8888bb', paddingLeft: 10 },
   rideStatsRow: { flexDirection: 'row', gap: 10, paddingLeft: 10, paddingBottom: 12, paddingTop: 4 },
   rideStat: { fontSize: 12, fontWeight: '600' },
+
+  // ─── Modération ────────────────────────────────────────────────────────────
+  blockBtn: { backgroundColor: '#fff', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1.5, borderColor: '#ffdddd' },
+  blockText: { color: '#e05c3a', fontSize: 14, fontWeight: '600' },
 });

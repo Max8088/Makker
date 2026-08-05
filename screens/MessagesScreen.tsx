@@ -600,7 +600,39 @@ export default function MessagesScreen({ onConversationsUpdated }: Props) {
       },
     ]);
   };
+// ─── Signaler un message ──────────────────────────────────────────────────
+const handleReportMessage = (msg: Message) => {
+  Alert.alert(
+    'Signaler ce message',
+    'Pourquoi signales-tu ce contenu ?',
+    [
+      { text: 'Contenu offensant', onPress: () => submitReport(msg, 'Contenu offensant') },
+      { text: 'Harcèlement', onPress: () => submitReport(msg, 'Harcèlement') },
+      { text: 'Spam', onPress: () => submitReport(msg, 'Spam') },
+      { text: 'Autre', onPress: () => submitReport(msg, 'Autre') },
+      { text: 'Annuler', style: 'cancel' },
+    ]
+  );
+};
 
+const submitReport = async (msg: Message, reason: string) => {
+  if (!userId) return;
+  const { error } = await supabase.from('reports').insert({
+    reporter_id: userId,
+    message_id: msg.id,
+    sortie_id: msg.sortie_id,
+    reported_user_id: msg.user_id,
+    reason,
+  });
+  if (error) {
+    Alert.alert('Erreur', "Le signalement n'a pas pu être envoyé.");
+    return;
+  }
+  Alert.alert(
+    'Signalement envoyé',
+    'Merci. Notre équipe examinera ce contenu sous 24 h et prendra les mesures nécessaires.'
+  );
+};
   // ─── Quitter la conversation (participant uniquement) ─────────────────────
   const handleLeaveConversation = () => {
     if (!openChat || !userId) return;
@@ -825,6 +857,12 @@ export default function MessagesScreen({ onConversationsUpdated }: Props) {
         style: 'destructive',
         onPress: () => handleDeleteMessage(msg),
       });
+    } else if (msg) {
+      options.push({
+        text: 'Signaler ce contenu',
+        style: 'destructive',
+        onPress: () => handleReportMessage(msg),
+      });
     }
 
     options.push({ text: 'Annuler', style: 'cancel' });
@@ -1003,10 +1041,7 @@ export default function MessagesScreen({ onConversationsUpdated }: Props) {
                         <TouchableOpacity
                           activeOpacity={0.9}
                           onPress={() => setSelectedImage(msg.media_url!)}
-                          onLongPress={() => isMe
-                            ? showMediaOptions(msg.media_url!, 'image', msg)
-                            : showMediaOptions(msg.media_url!, 'image')
-                          }
+                          onLongPress={() => showMediaOptions(msg.media_url!, 'image', msg)}
                         >
                           <Image
                             source={{ uri: msg.media_url }}
@@ -1033,10 +1068,7 @@ export default function MessagesScreen({ onConversationsUpdated }: Props) {
                       <View style={[styles.mediaBubble, isMe && { alignItems: 'flex-end' }]}>
                         <TouchableOpacity
                           activeOpacity={0.9}
-                          onLongPress={() => isMe
-                            ? showMediaOptions(msg.media_url!, 'video', msg)
-                            : showMediaOptions(msg.media_url!, 'video')
-                          }
+                          onLongPress={() => showMediaOptions(msg.media_url!, 'video', msg)}
                         >
                           <View
                             style={[
@@ -1060,7 +1092,17 @@ export default function MessagesScreen({ onConversationsUpdated }: Props) {
                       <>
                         <TouchableOpacity
                           activeOpacity={0.85}
-                          onLongPress={() => isMe && handleDeleteMessage(msg)}
+                          onLongPress={() => {
+                            if (isMe) {
+                              handleDeleteMessage(msg);
+                            } else {
+                              Alert.alert('Message', 'Que veux-tu faire ?', [
+                                { text: 'Signaler ce message', style: 'destructive', onPress: () => handleReportMessage(msg) },
+                                { text: 'Voir le profil', onPress: () => setShowProfile(msg.user_id) },
+                                { text: 'Annuler', style: 'cancel' },
+                              ]);
+                            }
+                          }}
                         >
                           <View
                             style={[
