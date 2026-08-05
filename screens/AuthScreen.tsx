@@ -12,6 +12,9 @@ WebBrowser.maybeCompleteAuthSession();
 
 type Mode = 'login' | 'register';
 
+const CGU_URL = 'https://max8088.github.io/Makker/cgu.html';
+const PRIVACY_URL = 'https://max8088.github.io/Makker/';
+
 export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
@@ -339,6 +342,18 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
             )}
           </TouchableOpacity>
 
+          <Text style={styles.legalText}>
+            En continuant, tu acceptes les{' '}
+            <Text style={styles.legalLink} onPress={() => Linking.openURL(CGU_URL)}>
+              Conditions d'utilisation
+            </Text>
+            {' '}et la{' '}
+            <Text style={styles.legalLink} onPress={() => Linking.openURL(PRIVACY_URL)}>
+              Politique de confidentialité
+            </Text>
+            .{'\n'}Makker applique une tolérance zéro envers les contenus offensants et les comportements abusifs.
+          </Text>
+
         </View>
 
         <Text style={styles.footer}>
@@ -355,9 +370,9 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F3FF' },
-  scroll: { flexGrow: 1, padding: 24, justifyContent: 'center' },
-  logoWrap: { alignItems: 'center', marginBottom: 36 },
-  logoImage: { width: 90, height: 90, borderRadius: 22, marginBottom: 16 },
+  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingVertical: 16, justifyContent: 'center' },
+  logoWrap: { alignItems: 'center', marginBottom: 20 },
+  logoImage: { width: 72, height: 72, borderRadius: 18, marginBottom: 10 },
   logoText: { fontSize: 32, fontWeight: '800', color: '#1a1a2e', letterSpacing: 2 },
   logoSub: { fontSize: 11, color: '#7B7BAA', marginTop: 6, letterSpacing: 2 },
   toggle: {
@@ -366,7 +381,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1, borderColor: '#DDD8FF',
     padding: 4,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   toggleBtn: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: 'center' },
   toggleBtnActive: { backgroundColor: '#5B52F0' },
@@ -396,6 +411,8 @@ const styles = StyleSheet.create({
   },
   googleIcon: { width: 20, height: 20 },
   googleText: { fontSize: 14, fontWeight: '500', color: '#1a1a2e' },
-  footer: { textAlign: 'center', marginTop: 24, fontSize: 13, color: '#aaa' },
+  legalText: { fontSize: 11, color: '#8888bb', textAlign: 'center', lineHeight: 16, paddingHorizontal: 4, marginTop: 4 },
+  legalLink: { color: '#5B52F0', fontWeight: '600', textDecorationLine: 'underline' },
+  footer: { textAlign: 'center', marginTop: 16, fontSize: 13, color: '#aaa' },
   footerLink: { color: '#7B7BAA', fontWeight: '600' },
 });
