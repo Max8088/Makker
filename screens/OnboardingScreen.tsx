@@ -141,7 +141,12 @@ export default function OnboardingScreen({ onFinish }: Props) {
 
     if (avatarUrl) updates.avatar_url = avatarUrl;
 
-    if (!existingProfile) {
+    if (existingProfile) {
+      // Le profil existe déjà : on doit quand même fournir prenom/nom,
+      // sinon l'upsert essaiera d'insérer NULL et violera la contrainte NOT NULL.
+      updates.prenom = existingProfile.prenom;
+      updates.nom = existingProfile.nom;
+    } else {
       // Le profil n'existe pas : on complète avec ce qu'on a (metadata Google,
       // ou des valeurs vides en dernier recours pour ne pas violer NOT NULL)
       const fullName = user.user_metadata?.full_name || user.user_metadata?.name || '';

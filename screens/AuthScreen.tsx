@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Image, Alert
+  StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Image, Alert, Dimensions
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -14,6 +14,7 @@ type Mode = 'login' | 'register';
 
 const CGU_URL = 'https://max8088.github.io/Makker/cgu.html';
 const PRIVACY_URL = 'https://max8088.github.io/Makker/';
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
   const [mode, setMode] = useState<Mode>('login');
@@ -209,158 +210,164 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
-        <View style={styles.logoWrap}>
-          <Image
-            source={require('../assets/logo_makker.png')}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-          <Text style={styles.logoText}>MAKKER</Text>
-          <Text style={styles.logoSub}>ENSEMBLE, PLUS LOIN</Text>
-        </View>
+        {/* ─── Bloc principal : occupe tout l'écran à l'ouverture ─────────── */}
+        <View style={styles.mainBlock}>
 
-        <View style={styles.toggle}>
-          <TouchableOpacity
-            style={[styles.toggleBtn, mode === 'login' && styles.toggleBtnActive]}
-            onPress={() => setMode('login')}
-          >
-            <Text style={[styles.toggleText, mode === 'login' && styles.toggleTextActive]}>Connexion</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.toggleBtn, mode === 'register' && styles.toggleBtnActive]}
-            onPress={() => setMode('register')}
-          >
-            <Text style={[styles.toggleText, mode === 'register' && styles.toggleTextActive]}>Inscription</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.form}>
-
-          {mode === 'register' && (
-            <>
-              <View style={styles.row}>
-                <View style={[styles.fieldGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Prénom</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="ex: Maxime"
-                    placeholderTextColor="#bbbbdd"
-                    value={prenom}
-                    onChangeText={setPrenom}
-                    autoCapitalize="words"
-                  />
-                </View>
-                <View style={[styles.fieldGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Nom</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="ex: Dupont"
-                    placeholderTextColor="#bbbbdd"
-                    value={nom}
-                    onChangeText={setNom}
-                    autoCapitalize="words"
-                  />
-                </View>
-              </View>
-
-            </>
-          )}
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="ton@email.com"
-              placeholderTextColor="#bbbbdd"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../assets/logo_makker.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
             />
+            <Text style={styles.logoText}>MAKKER</Text>
+            <Text style={styles.logoSub}>ENSEMBLE, PLUS LOIN</Text>
           </View>
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Mot de passe</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor="#bbbbdd"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-          </View>
-
-          {mode === 'login' && (
-            <TouchableOpacity style={styles.forgotBtn}>
-              <Text style={styles.forgotText}>Mot de passe oublié ?</Text>
+          <View style={styles.toggle}>
+            <TouchableOpacity
+              style={[styles.toggleBtn, mode === 'login' && styles.toggleBtnActive]}
+              onPress={() => setMode('login')}
+            >
+              <Text style={[styles.toggleText, mode === 'login' && styles.toggleTextActive]}>Connexion</Text>
             </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={[styles.submitBtn, loading && { opacity: 0.7 }]}
-            onPress={mode === 'login' ? handleLogin : handleRegister}
-            disabled={loading}
-          >
-            <Text style={styles.submitText}>
-              {loading ? 'Chargement...' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
-            </Text>
-          </TouchableOpacity>
-
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>ou</Text>
-            <View style={styles.dividerLine} />
+            <TouchableOpacity
+              style={[styles.toggleBtn, mode === 'register' && styles.toggleBtnActive]}
+              onPress={() => setMode('register')}
+            >
+              <Text style={[styles.toggleText, mode === 'register' && styles.toggleTextActive]}>Inscription</Text>
+            </TouchableOpacity>
           </View>
 
-          {appleAvailable && (
-            <AppleAuthentication.AppleAuthenticationButton
-              buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-              cornerRadius={12}
-              style={styles.appleBtn}
-              onPress={handleAppleLogin}
-            />
-          )}
+          <View style={styles.form}>
 
-          <TouchableOpacity
-            style={[styles.googleBtn, googleLoading && { opacity: 0.7 }]}
-            onPress={handleGoogleLogin}
-            disabled={googleLoading}
-            activeOpacity={0.85}
-          >
-            {googleLoading ? (
-              <Text style={styles.googleText}>Connexion en cours...</Text>
-            ) : (
+            {mode === 'register' && (
               <>
-                <Image
-                  source={{ uri: 'https://www.google.com/favicon.ico' }}
-                  style={styles.googleIcon}
-                />
-                <Text style={styles.googleText}>Continuer avec Google</Text>
+                <View style={styles.row}>
+                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                    <Text style={styles.label}>Prénom</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="ex: Maxime"
+                      placeholderTextColor="#bbbbdd"
+                      value={prenom}
+                      onChangeText={setPrenom}
+                      autoCapitalize="words"
+                    />
+                  </View>
+                  <View style={[styles.fieldGroup, { flex: 1 }]}>
+                    <Text style={styles.label}>Nom</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="ex: Dupont"
+                      placeholderTextColor="#bbbbdd"
+                      value={nom}
+                      onChangeText={setNom}
+                      autoCapitalize="words"
+                    />
+                  </View>
+                </View>
               </>
             )}
-          </TouchableOpacity>
 
-          <Text style={styles.legalText}>
-            En continuant, tu acceptes les{' '}
-            <Text style={styles.legalLink} onPress={() => Linking.openURL(CGU_URL)}>
-              Conditions d'utilisation
-            </Text>
-            {' '}et la{' '}
-            <Text style={styles.legalLink} onPress={() => Linking.openURL(PRIVACY_URL)}>
-              Politique de confidentialité
-            </Text>
-            .{'\n'}Makker applique une tolérance zéro envers les contenus offensants et les comportements abusifs.
-          </Text>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="ton@email.com"
+                placeholderTextColor="#bbbbdd"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Mot de passe</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="••••••••"
+                placeholderTextColor="#bbbbdd"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+            </View>
+
+            {mode === 'login' && (
+              <TouchableOpacity style={styles.forgotBtn}>
+                <Text style={styles.forgotText}>Mot de passe oublié ?</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[styles.submitBtn, loading && { opacity: 0.7 }]}
+              onPress={mode === 'login' ? handleLogin : handleRegister}
+              disabled={loading}
+            >
+              <Text style={styles.submitText}>
+                {loading ? 'Chargement...' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>ou</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {appleAvailable && (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                cornerRadius={12}
+                style={styles.appleBtn}
+                onPress={handleAppleLogin}
+              />
+            )}
+
+            <TouchableOpacity
+              style={[styles.googleBtn, googleLoading && { opacity: 0.7 }]}
+              onPress={handleGoogleLogin}
+              disabled={googleLoading}
+              activeOpacity={0.85}
+            >
+              {googleLoading ? (
+                <Text style={styles.googleText}>Connexion en cours...</Text>
+              ) : (
+                <>
+                  <Image
+                    source={{ uri: 'https://www.google.com/favicon.ico' }}
+                    style={styles.googleIcon}
+                  />
+                  <Text style={styles.googleText}>Continuer avec Google</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+          </View>
 
         </View>
+        {/* ─── Fin du bloc principal ──────────────────────────────────────── */}
 
+        {/* ─── Zone visible en faisant défiler ────────────────────────────── */}
         <Text style={styles.footer}>
           {mode === 'login' ? 'Pas encore de compte ? ' : 'Déjà un compte ? '}
           <Text style={styles.footerLink} onPress={() => setMode(mode === 'login' ? 'register' : 'login')}>
             {mode === 'login' ? "S'inscrire" : 'Se connecter'}
           </Text>
+        </Text>
+
+        <Text style={styles.legalText}>
+          En continuant, tu acceptes les{' '}
+          <Text style={styles.legalLink} onPress={() => Linking.openURL(CGU_URL)}>
+            Conditions d'utilisation
+          </Text>
+          {' '}et la{' '}
+          <Text style={styles.legalLink} onPress={() => Linking.openURL(PRIVACY_URL)}>
+            Politique de confidentialité
+          </Text>
+          .{'\n'}Makker applique une tolérance zéro envers les contenus offensants et les comportements abusifs.
         </Text>
 
       </ScrollView>
@@ -370,9 +377,10 @@ export default function AuthScreen({ onLogin }: { onLogin: () => void }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F3FF' },
-  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingVertical: 16, justifyContent: 'center' },
-  logoWrap: { alignItems: 'center', marginBottom: 20 },
-  logoImage: { width: 72, height: 72, borderRadius: 18, marginBottom: 10 },
+  scroll: { paddingHorizontal: 24, paddingBottom: 32 },
+  mainBlock: { minHeight: SCREEN_HEIGHT, justifyContent: 'center' },
+  logoWrap: { alignItems: 'center', marginBottom: 32 },
+  logoImage: { width: 90, height: 90, borderRadius: 22, marginBottom: 16 },
   logoText: { fontSize: 32, fontWeight: '800', color: '#1a1a2e', letterSpacing: 2 },
   logoSub: { fontSize: 11, color: '#7B7BAA', marginTop: 6, letterSpacing: 2 },
   toggle: {
@@ -381,7 +389,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1, borderColor: '#DDD8FF',
     padding: 4,
-    marginBottom: 16,
+    marginBottom: 20,
   },
   toggleBtn: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: 'center' },
   toggleBtnActive: { backgroundColor: '#5B52F0' },
@@ -411,8 +419,8 @@ const styles = StyleSheet.create({
   },
   googleIcon: { width: 20, height: 20 },
   googleText: { fontSize: 14, fontWeight: '500', color: '#1a1a2e' },
-  legalText: { fontSize: 11, color: '#8888bb', textAlign: 'center', lineHeight: 16, paddingHorizontal: 4, marginTop: 4 },
-  legalLink: { color: '#5B52F0', fontWeight: '600', textDecorationLine: 'underline' },
-  footer: { textAlign: 'center', marginTop: 16, fontSize: 13, color: '#aaa' },
+  footer: { textAlign: 'center', marginTop: 24, fontSize: 13, color: '#aaa' },
   footerLink: { color: '#7B7BAA', fontWeight: '600' },
+  legalText: { fontSize: 11, color: '#8888bb', textAlign: 'center', lineHeight: 16, paddingHorizontal: 4, marginTop: 20 },
+  legalLink: { color: '#5B52F0', fontWeight: '600', textDecorationLine: 'underline' },
 });
