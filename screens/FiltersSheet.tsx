@@ -34,6 +34,13 @@ const CRENEAUX = [
   { id: 'weekend', label: '📅 Weekend' },
 ];
 
+const GENRES = [
+  { id: 'all', label: 'Toutes' },
+  { id: 'mixte', label: '🤝 Mixte' },
+  { id: 'femmes', label: '👩 Femmes' },
+  { id: 'hommes', label: '👨 Hommes' },
+];
+
 export type Filters = {
   sport: string;
   niveau: string;
@@ -42,6 +49,7 @@ export type Filters = {
   distanceMax: number;
   deniveleMax: number;
   placesDisponibles: boolean;
+  genre: string;
 };
 
 export const defaultFilters: Filters = {
@@ -52,6 +60,7 @@ export const defaultFilters: Filters = {
   distanceMax: 200,
   deniveleMax: 3000,
   placesDisponibles: false,
+  genre: 'all',
 };
 
 type Props = {
@@ -113,6 +122,7 @@ export default function FiltersSheet({ visible, filters, onApply, onClose }: Pro
     local.distanceMax < 200,
     local.deniveleMax < 3000,
     local.placesDisponibles,
+    local.genre !== 'all',
   ].filter(Boolean).length;
 
   return (
@@ -125,18 +135,16 @@ export default function FiltersSheet({ visible, filters, onApply, onClose }: Pro
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose} />
 
       <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}
-  {...panResponder.panHandlers}
->
-  {/* Handle */}
-  <View style={styles.handle} />
+        {...panResponder.panHandlers}
+      >
+        <View style={styles.handle} />
 
-  {/* Header */}
-  <View style={styles.header}>
-    <Text style={styles.title}>Filtres</Text>
-    <TouchableOpacity onPress={handleReset}>
-      <Text style={styles.resetText}>Réinitialiser</Text>
-    </TouchableOpacity>
-  </View>
+        <View style={styles.header}>
+          <Text style={styles.title}>Filtres</Text>
+          <TouchableOpacity onPress={handleReset}>
+            <Text style={styles.resetText}>Réinitialiser</Text>
+          </TouchableOpacity>
+        </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 24, paddingBottom: 20 }}>
 
@@ -161,6 +169,22 @@ export default function FiltersSheet({ visible, filters, onApply, onClose }: Pro
                   onPress={() => update('niveau', n.id)}
                 >
                   <Text style={[styles.chipText, local.niveau === n.id && styles.chipTextActive]}>{n.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* ─── Filtre Genre ───────────────────────────────────────────── */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Sorties ouvertes à</Text>
+            <View style={styles.chipsWrap}>
+              {GENRES.map(g => (
+                <TouchableOpacity
+                  key={g.id}
+                  style={[styles.chip, local.genre === g.id && styles.chipActive]}
+                  onPress={() => update('genre', g.id)}
+                >
+                  <Text style={[styles.chipText, local.genre === g.id && styles.chipTextActive]}>{g.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>

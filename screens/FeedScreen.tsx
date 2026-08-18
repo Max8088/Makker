@@ -33,9 +33,14 @@ const NIVEAU_CONFIG: { [key: string]: { color: string; bg: string; label: string
   difficile:     { color: '#610230', bg: '#FFF1F2', label: 'Difficile' },
 };
 
+const GENRE_LABELS: { [key: string]: string } = {
+  mixte: '🤝 Mixte',
+  femmes: '👩 Femmes',
+  hommes: '👨 Hommes',
+};
+
 const isVelo = (sport: string) => sport === 'route' || sport === 'vtt';
 
-// ─── Point 3 : capitalize le titre ───────────────────────────────────────────
 const capitalize = (str: string) =>
   str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
 
@@ -44,6 +49,7 @@ type Sortie = {
   elevation: string; allure: string; lieu: string; lieu_rencontre: string;
   date_sortie: string; heure: string; participants_max: number;
   niveau: string; description: string; createur_id: string; created_at: string;
+  genre_requis?: string;
 };
 
 const parseDate = (dateStr: string): Date => {
@@ -55,8 +61,6 @@ const parseDate = (dateStr: string): Date => {
 
 const isSameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-
-// ─── Card composant ───────────────────────────────────────────────────────────
 
 function RideCard({
   ride, onDetail, onJoin, hasJoined,
@@ -70,6 +74,9 @@ function RideCard({
   const paceDisplay = ride.allure ? `${ride.allure} ${paceUnit}` : '—';
   const dateObj = parseDate(ride.date_sortie);
   const dateLabel = dateObj.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  const genreLabel = ride.genre_requis && ride.genre_requis !== 'mixte'
+    ? GENRE_LABELS[ride.genre_requis]
+    : null;
 
   return (
     <TouchableOpacity style={styles.card} onPress={onDetail} activeOpacity={0.92}>
@@ -80,9 +87,13 @@ function RideCard({
             <Text style={styles.sportEmoji}>{SPORT_EMOJIS[ride.sport]}</Text>
           </View>
           <View style={{ flex: 1 }}>
-            {/* Point 3 : capitalize */}
             <Text style={styles.cardTitle} numberOfLines={1}>{capitalize(ride.titre)}</Text>
-            <Text style={[styles.cardSportLabel, { color }]}>{SPORT_LABELS[ride.sport]}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.cardSportLabel, { color }]}>{SPORT_LABELS[ride.sport]}</Text>
+              {genreLabel && (
+                <Text style={styles.genreTag}>{genreLabel}</Text>
+              )}
+            </View>
           </View>
           {niveau && (
             <View style={[styles.niveauBadge, { backgroundColor: niveau.bg, borderColor: niveau.color + '40' }]}>
@@ -125,7 +136,6 @@ function RideCard({
             <Text style={styles.participantsIcon}>👥</Text>
             <Text style={styles.participantsText}>Max {ride.participants_max}</Text>
           </View>
-          {/* Point 4 : bouton adaptatif selon hasJoined */}
           {hasJoined ? (
             <View style={[styles.joinedBadge, { backgroundColor: bg, borderColor: color + '40' }]}>
               <Text style={[styles.joinedBadgeText, { color }]}>✓ Inscrit</Text>
@@ -141,8 +151,6 @@ function RideCard({
   );
 }
 
-// ─── FeedScreen ───────────────────────────────────────────────────────────────
-
 export default function FeedScreen() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [sorties, setSorties] = useState<Sortie[]>([]);
@@ -151,8 +159,8 @@ export default function FeedScreen() {
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [selectedRide, setSelectedRide] = useState<Sortie | null>(null);
-  // Point 4 : set des sorties déjà rejointes
   const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
+  const [userGenre, setUserGenre] = useState<string>('non_precise');
 
   const fetchSorties = async () => {
     const { data, error } = await supabase.from('sorties').select('*').order('created_at', { ascending: false });
@@ -161,7 +169,6 @@ export default function FeedScreen() {
     setRefreshing(false);
   };
 
-  // Point 4 : charger les participations de l'utilisateur
   const fetchJoined = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -169,7 +176,15 @@ export default function FeedScreen() {
     if (data) setJoinedIds(new Set(data.map(p => p.sortie_id)));
   };
 
-  useEffect(() => { fetchSorties(); fetchJoined(); }, []);
+  // Récupère le genre de l'utilisateur pour filtrer les sorties incompatibles
+  const fetchUserGenre = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase.from('profiles').select('genre').eq('id', user.id).single();
+    if (data?.genre) setUserGenre(data.genre);
+  };
+
+  useEffect(() => { fetchSorties(); fetchJoined(); fetchUserGenre(); }, []);
 
   const onRefresh = () => { setRefreshing(true); fetchSorties(); fetchJoined(); };
 
@@ -189,13 +204,12 @@ export default function FeedScreen() {
     filters.sport !== 'all', filters.niveau !== 'all',
     filters.date !== 'all', filters.creneau !== 'all',
     filters.distanceMax < 200, filters.deniveleMax < 3000,
-    filters.placesDisponibles,
+    filters.placesDisponibles, filters.genre !== 'all',
   ].filter(Boolean).length;
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
 
   const filtered = sorties.filter(ride => {
-    // Point 7 : filtrer les sorties passées par défaut
     const dateRide = parseDate(ride.date_sortie); dateRide.setHours(0, 0, 0, 0);
     if (dateRide < today) return false;
 
@@ -204,6 +218,20 @@ export default function FeedScreen() {
     if (filters.niveau !== 'all' && ride.niveau !== filters.niveau) return false;
     if (filters.distanceMax < 200 && parseFloat(ride.distance) > filters.distanceMax) return false;
     if (filters.deniveleMax < 3000 && parseFloat(ride.elevation) > filters.deniveleMax) return false;
+
+    // Filtre genre : masque les sorties incompatibles avec le genre de l'utilisateur
+    // Ex: une utilisatrice (femme) ne voit pas les sorties "hommes uniquement"
+    if (ride.genre_requis && ride.genre_requis !== 'mixte') {
+      if (userGenre !== 'non_precise' && ride.genre_requis !== userGenre + 's' && ride.genre_requis !== userGenre) {
+        // Remap: genre profil "homme" → genre_requis "hommes", "femme" → "femmes"
+        const genreRequisNormalized = ride.genre_requis === 'hommes' ? 'homme' : 'femme';
+        if (userGenre !== 'non_precise' && userGenre !== genreRequisNormalized) return false;
+      }
+    }
+
+    // Filtre genre depuis le FiltersSheet (choix explicite de l'utilisateur)
+    if (filters.genre !== 'all' && ride.genre_requis !== filters.genre) return false;
+
     if (filters.creneau !== 'all') {
       const heure = parseInt(ride.heure?.split(':')[0] || '0');
       const dateRideCreneau = parseDate(ride.date_sortie);
@@ -229,6 +257,11 @@ export default function FeedScreen() {
       }
     }
     return true;
+  }).sort((a, b) => {
+    // Tri chronologique : la sortie la plus proche en premier
+    const da = parseDate(a.date_sortie).getTime();
+    const db = parseDate(b.date_sortie).getTime();
+    return da - db;
   });
 
   if (selectedRide) return (
@@ -237,7 +270,6 @@ export default function FeedScreen() {
 
   return (
     <View style={styles.container}>
-
       <View style={styles.header}>
         <View>
           <Text style={styles.titleMain}>Makker</Text>
@@ -350,6 +382,7 @@ const styles = StyleSheet.create({
   sportEmoji: { fontSize: 18 },
   cardTitle: { fontSize: 15, fontWeight: '700', color: '#1a1a2e', letterSpacing: 0.1 },
   cardSportLabel: { fontSize: 11, fontWeight: '600', marginTop: 1 },
+  genreTag: { fontSize: 10, fontWeight: '600', color: '#8888bb', backgroundColor: '#F4F3FF', borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1 },
   niveauBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, borderWidth: 1 },
   niveauText: { fontSize: 10, fontWeight: '700' },
   statsRow: { flexDirection: 'row', gap: 6, marginBottom: 8 },
@@ -367,7 +400,6 @@ const styles = StyleSheet.create({
   participantsText: { fontSize: 12, color: '#8888bb', fontWeight: '500' },
   joinBtn: { borderRadius: 10, paddingVertical: 8, paddingHorizontal: 18 },
   joinText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  // Point 4 : badge "Inscrit"
   joinedBadge: { borderRadius: 10, paddingVertical: 7, paddingHorizontal: 14, borderWidth: 1 },
   joinedBadgeText: { fontWeight: '700', fontSize: 12 },
 });

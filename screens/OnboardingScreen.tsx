@@ -26,7 +26,14 @@ const CRENEAUX = [
   { id: 'weekend', label: '📅 Weekend' },
 ];
 
-const TOTAL_STEPS = 5;
+const GENRES = [
+  { id: 'homme', label: 'Homme', emoji: '👨' },
+  { id: 'femme', label: 'Femme', emoji: '👩' },
+  { id: 'non_precise', label: 'Ne pas préciser', emoji: '🤝' },
+];
+
+// Ville(0) → Genre(1) → Photo(2) → Sport(3) → Niveau(4) → Créneaux(5)
+const TOTAL_STEPS = 6;
 
 type Props = {
   onFinish: () => void;
@@ -35,6 +42,7 @@ type Props = {
 export default function OnboardingScreen({ onFinish }: Props) {
   const [step, setStep] = useState(0);
   const [ville, setVille] = useState('');
+  const [genre, setGenre] = useState('non_precise');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [sportPrincipal, setSportPrincipal] = useState('route');
@@ -122,8 +130,6 @@ export default function OnboardingScreen({ onFinish }: Props) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
 
-    // Vérifie si le profil existe déjà ; sinon on doit fournir prenom/nom
-    // (colonnes NOT NULL) en les récupérant depuis les métadonnées auth.
     const { data: existingProfile } = await supabase
       .from('profiles')
       .select('id, prenom, nom')
@@ -133,6 +139,7 @@ export default function OnboardingScreen({ onFinish }: Props) {
     const updates: any = {
       id: user.id,
       ville: ville.trim(),
+      genre,
       sport_principal: sportPrincipal,
       niveau,
       creneaux,
@@ -142,13 +149,9 @@ export default function OnboardingScreen({ onFinish }: Props) {
     if (avatarUrl) updates.avatar_url = avatarUrl;
 
     if (existingProfile) {
-      // Le profil existe déjà : on doit quand même fournir prenom/nom,
-      // sinon l'upsert essaiera d'insérer NULL et violera la contrainte NOT NULL.
       updates.prenom = existingProfile.prenom;
       updates.nom = existingProfile.nom;
     } else {
-      // Le profil n'existe pas : on complète avec ce qu'on a (metadata Google,
-      // ou des valeurs vides en dernier recours pour ne pas violer NOT NULL)
       const fullName = user.user_metadata?.full_name || user.user_metadata?.name || '';
       const nameParts = fullName.trim().split(' ');
       updates.prenom = nameParts[0] || 'Utilisateur';
@@ -158,7 +161,6 @@ export default function OnboardingScreen({ onFinish }: Props) {
       }
     }
 
-    // upsert : met à jour si le profil existe, le crée sinon
     const { data: savedRows, error } = await supabase
       .from('profiles')
       .upsert(updates, { onConflict: 'id' })
@@ -207,7 +209,31 @@ export default function OnboardingScreen({ onFinish }: Props) {
             />
           </View>
         );
+
       case 1:
+        return (
+          <View style={styles.stepContent}>
+            <Text style={styles.stepEmoji}>🙋</Text>
+            <Text style={styles.stepTitle}>Tu es ?</Text>
+            <Text style={styles.stepSub}>Pour rejoindre des sorties adaptées à tes préférences</Text>
+            <View style={styles.genreCol}>
+              {GENRES.map(g => (
+                <TouchableOpacity
+                  key={g.id}
+                  style={[styles.genreBtn, genre === g.id && styles.genreBtnActive]}
+                  onPress={() => setGenre(g.id)}
+                >
+                  <Text style={styles.genreEmoji}>{g.emoji}</Text>
+                  <Text style={[styles.genreLabel, genre === g.id && styles.genreLabelActive]}>
+                    {g.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        );
+
+      case 2:
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepEmoji}>📸</Text>
@@ -227,7 +253,8 @@ export default function OnboardingScreen({ onFinish }: Props) {
             </Text>
           </View>
         );
-      case 2:
+
+      case 3:
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepEmoji}>🏃</Text>
@@ -249,7 +276,8 @@ export default function OnboardingScreen({ onFinish }: Props) {
             </View>
           </View>
         );
-      case 3:
+
+      case 4:
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepEmoji}>📈</Text>
@@ -268,7 +296,8 @@ export default function OnboardingScreen({ onFinish }: Props) {
             </View>
           </View>
         );
-      case 4:
+
+      case 5:
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepEmoji}>🗓️</Text>
@@ -290,6 +319,7 @@ export default function OnboardingScreen({ onFinish }: Props) {
             </View>
           </View>
         );
+
       default:
         return null;
     }
@@ -351,7 +381,7 @@ const styles = StyleSheet.create({
   backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#DDD8FF', alignItems: 'center', justifyContent: 'center' },
   backArrow: { fontSize: 18, color: '#5B52F0' },
   progressRow: { flexDirection: 'row', gap: 6 },
-  progressDot: { width: 22, height: 5, borderRadius: 3, backgroundColor: '#DDD8FF' },
+  progressDot: { width: 18, height: 5, borderRadius: 3, backgroundColor: '#DDD8FF' },
   progressDotActive: { backgroundColor: '#5B52F0' },
   skipAllText: { fontSize: 13, color: '#8888bb', fontWeight: '600' },
   scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
@@ -365,6 +395,18 @@ const styles = StyleSheet.create({
     padding: 14, fontSize: 15, color: '#1a1a2e',
     width: '100%', textAlign: 'center',
   },
+  // Genre
+  genreCol: { width: '100%', gap: 10 },
+  genreBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    padding: 16, borderRadius: 14,
+    borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff',
+  },
+  genreBtnActive: { borderColor: '#5B52F0', backgroundColor: '#EEEDFE' },
+  genreEmoji: { fontSize: 24 },
+  genreLabel: { fontSize: 15, fontWeight: '600', color: '#8888bb' },
+  genreLabelActive: { color: '#5B52F0', fontWeight: '700' },
+  // Avatar
   avatarPicker: { marginBottom: 6 },
   avatarImg: { width: 110, height: 110, borderRadius: 28 },
   avatarPlaceholder: {
@@ -374,6 +416,7 @@ const styles = StyleSheet.create({
   },
   avatarPlaceholderText: { fontSize: 32 },
   avatarHint: { fontSize: 12, color: '#8888bb' },
+  // Sport
   sportGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', width: '100%' },
   sportBtn: {
     width: '45%', alignItems: 'center', padding: 16, borderRadius: 14,
@@ -383,14 +426,17 @@ const styles = StyleSheet.create({
   sportEmoji: { fontSize: 28, marginBottom: 6 },
   sportLabel: { fontSize: 12, fontWeight: '500', color: '#8888bb' },
   sportLabelActive: { color: '#5B52F0', fontWeight: '700' },
+  // Niveau
   levelCol: { width: '100%', gap: 10 },
   levelBtn: { padding: 14, borderRadius: 12, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   levelText: { fontSize: 14, fontWeight: '600', color: '#8888bb', textAlign: 'center' },
+  // Créneaux
   creneauxGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
   creneauBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff' },
   creneauBtnActive: { backgroundColor: '#5B52F0', borderColor: '#5B52F0' },
   creneauText: { fontSize: 13, fontWeight: '500', color: '#8888bb' },
   creneauTextActive: { color: '#fff', fontWeight: '600' },
+  // Footer
   footer: { padding: 20, paddingBottom: 28 },
   nextBtn: { backgroundColor: '#5B52F0', borderRadius: 14, padding: 16, alignItems: 'center' },
   nextBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },

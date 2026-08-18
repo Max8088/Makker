@@ -87,9 +87,20 @@ export default function ProfileScreen({ onForceOnboarding }: { onForceOnboarding
     const { data } = await supabase
       .from('sorties')
       .select('id, titre, sport, distance, elevation, date_sortie')
-      .eq('createur_id', user.id)
-      .order('created_at', { ascending: false });
-    setSorties(data || []);
+      .eq('createur_id', user.id);
+
+    // Tri chronologique par date de sortie (la plus proche en premier).
+    // La date est stockée au format texte JJ/MM/AAAA, donc on convertit
+    // en vraie date avant de comparer.
+    const toDate = (s: string): number => {
+      if (!s) return 0;
+      const p = s.split('/');
+      if (p.length !== 3) return 0;
+      return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0])).getTime();
+    };
+
+    const sorted = (data || []).sort((a, b) => toDate(a.date_sortie) - toDate(b.date_sortie));
+    setSorties(sorted);
   };
 
   const saveProfile = async () => {

@@ -39,6 +39,12 @@ type Sortie = {
   date_sortie: string; heure: string; participants_max: number;
   niveau: string; description: string; createur_id: string;
   latitude?: number; longitude?: number;
+  genre_requis?: string;
+};
+
+const GENRE_CONFIG: { [key: string]: { label: string; emoji: string } } = {
+  femmes: { label: 'Femmes uniquement', emoji: '👩' },
+  hommes: { label: 'Hommes uniquement', emoji: '👨' },
 };
 
 type Profile = {
@@ -214,6 +220,21 @@ export default function RideDetailScreen({ sortie, onBack }: Props) {
                   <Text style={styles.infoVal}>{participantsCount}/{sortie.participants_max} inscrits</Text>
                 </View>
               </View>
+
+              {sortie.genre_requis && GENRE_CONFIG[sortie.genre_requis] && (
+                <>
+                  <View style={styles.infoDivider} />
+                  <View style={styles.infoRow}>
+                    <View style={[styles.infoIconWrap, { backgroundColor: color + '15' }]}>
+                      <Text style={styles.infoIconEmoji}>{GENRE_CONFIG[sortie.genre_requis].emoji}</Text>
+                    </View>
+                    <View>
+                      <Text style={styles.infoLabel}>Ouvert à</Text>
+                      <Text style={styles.infoVal}>{GENRE_CONFIG[sortie.genre_requis].label}</Text>
+                    </View>
+                  </View>
+                </>
+              )}
             </View>
           </View>
 

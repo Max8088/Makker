@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Image, ActivityIndicator, Text } from 'react-native';
+import { View, Image, ActivityIndicator, Text, Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
 import FeedScreen from './screens/FeedScreen';
 import MapScreen from './screens/MapScreen';
 import CreateScreen from './screens/CreateScreen';
@@ -19,6 +21,64 @@ const ICONS = {
   Messages: require('./assets/icons/message_icon.png'),
   Profile: require('./assets/icons/profil_icon.png'),
 };
+
+// ─── Config globale des notifications (affichage quand app au premier plan) ───
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
+// ─── Enregistre le token push et le sauvegarde en base ───────────────────────
+async function registerPushToken(userId: string) {
+  // Les notifications push ne fonctionnent pas sur simulateur
+  if (!Device.isDevice) return;
+
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+
+  if (existingStatus !== 'granted') {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+
+  if (finalStatus !== 'granted') {
+    console.log('Permission notifications refusée');
+    return;
+  }
+
+  // Sur Android, il faut configurer un canal de notification
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'Makker',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#5B52F0',
+    });
+  }
+
+  try {
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId: 'abf373d8-d38f-4209-bc76-619462422315',
+    });
+
+    const token = tokenData.data;
+
+    await supabase
+      .from('push_tokens')
+      .upsert(
+        { user_id: userId, token, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      );
+
+    console.log('Push token enregistré:', token);
+  } catch (e) {
+    console.error('Erreur enregistrement push token:', e);
+  }
+}
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -91,6 +151,7 @@ export default function App() {
       if (session?.user) {
         await checkOnboarding(session.user.id);
         await checkUnreadConversations();
+        await registerPushToken(session.user.id);
       }
       setLoading(false);
     });
@@ -101,10 +162,19 @@ export default function App() {
       if (session?.user) {
         await checkOnboarding(session.user.id);
         await checkUnreadConversations();
+        await registerPushToken(session.user.id);
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Listener : notification reçue quand l'app est au premier plan
+    const foregroundSub = Notifications.addNotificationReceivedListener(() => {
+      checkUnreadConversations();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      foregroundSub.remove();
+    };
   }, []);
 
   // Rafraîchit le badge périodiquement (toutes les 15s) tant que connecté

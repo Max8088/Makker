@@ -21,6 +21,12 @@ const NIVEAUX = [
   { id: 'difficile', label: 'Difficile', color: '#e05c3a' },
 ];
 
+const GENRES_REQUIS = [
+  { id: 'mixte', label: 'Mixte', emoji: '🤝' },
+  { id: 'femmes', label: 'Femmes uniquement', emoji: '👩' },
+  { id: 'hommes', label: 'Hommes uniquement', emoji: '👨' },
+];
+
 const JOURS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 const MOIS = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -35,6 +41,7 @@ type Sortie = {
   date_sortie: string; heure: string; participants_max: number;
   niveau: string; description: string; createur_id: string;
   latitude?: number; longitude?: number;
+  genre_requis?: string;
 };
 
 type Suggestion = {
@@ -187,6 +194,7 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
   const [elevation, setElevation] = useState(sortie.elevation);
   const [allure, setAllure] = useState(sortie.allure);
   const [lieu, setLieu] = useState(sortie.lieu);
+  const [genreRequis, setGenreRequis] = useState(sortie.genre_requis || 'mixte');
   const [locationCoords, setLocationCoords] = useState<{ latitude: number; longitude: number } | null>(
     sortie.latitude ? { latitude: sortie.latitude, longitude: sortie.longitude! } : null
   );
@@ -272,6 +280,7 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
       titre, sport, distance, elevation, allure,
       lieu, lieu_rencontre: lieu, date_sortie: date, heure,
       participants_max: participants, niveau, description,
+      genre_requis: genreRequis,
       ...(locationCoords && { latitude: locationCoords.latitude, longitude: locationCoords.longitude }),
     }).eq('id', sortie.id);
     setLoading(false);
@@ -369,6 +378,23 @@ export default function EditRideScreen({ sortie, onBack, onSaved }: Props) {
                 {NIVEAUX.map(n => (
                   <TouchableOpacity key={n.id} style={[styles.niveauBtn, niveau === n.id && { borderColor: n.color, backgroundColor: n.color + '15' }]} onPress={() => setNiveau(n.id)}>
                     <Text style={[styles.niveauText, niveau === n.id && { color: n.color }]}>{n.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* ─── Genre requis ────────────────────────────────────────── */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Ouvert à</Text>
+              <View style={styles.genreRow}>
+                {GENRES_REQUIS.map(g => (
+                  <TouchableOpacity
+                    key={g.id}
+                    style={[styles.genreBtn, genreRequis === g.id && styles.genreBtnActive]}
+                    onPress={() => setGenreRequis(g.id)}
+                  >
+                    <Text style={styles.genreEmoji}>{g.emoji}</Text>
+                    <Text style={[styles.genreLabel, genreRequis === g.id && styles.genreLabelActive]}>{g.label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -508,6 +534,18 @@ const styles = StyleSheet.create({
   niveauxRow: { flexDirection: 'row', gap: 8 },
   niveauBtn: { flex: 1, padding: 9, borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff', alignItems: 'center' },
   niveauText: { fontSize: 11, fontWeight: '600', color: '#8888bb' },
+  // ─── Genre requis ─────────────────────────────────────────────────────────
+  genreRow: { gap: 8 },
+  genreBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: 11, borderRadius: 10, borderWidth: 1.5,
+    borderColor: '#DDD8FF', backgroundColor: '#fff',
+  },
+  genreBtnActive: { borderColor: '#5B52F0', backgroundColor: '#EEEDFE' },
+  genreEmoji: { fontSize: 16 },
+  genreLabel: { fontSize: 13, fontWeight: '500', color: '#8888bb' },
+  genreLabelActive: { color: '#5B52F0', fontWeight: '700' },
+  // ──────────────────────────────────────────────────────────────────────────
   participantsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', padding: 10 },
   pBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#EEEDFE', borderWidth: 1, borderColor: '#DDD8FF', alignItems: 'center', justifyContent: 'center' },
   pBtnText: { fontSize: 18, color: '#5B52F0', lineHeight: 22 },

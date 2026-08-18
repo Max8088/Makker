@@ -20,6 +20,12 @@ const LEVELS = [
   { id: 'difficile', label: 'Difficile', color: '#e05c3a' },
 ];
 
+const GENRES_REQUIS = [
+  { id: 'mixte', label: 'Mixte', emoji: '🤝' },
+  { id: 'femmes', label: 'Femmes uniquement', emoji: '👩' },
+  { id: 'hommes', label: 'Hommes uniquement', emoji: '👨' },
+];
+
 const JOURS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 const MOIS = [
   'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -168,6 +174,7 @@ function TimePicker({ time, onConfirm }: { time: string; onConfirm: (time: strin
 export default function CreateScreen() {
   const [selectedSport, setSelectedSport] = useState('route');
   const [selectedLevel, setSelectedLevel] = useState('intermediaire');
+  const [genreRequis, setGenreRequis] = useState('mixte');
   const [participants, setParticipants] = useState(8);
   const [title, setTitle] = useState('');
   const [distance, setDistance] = useState('');
@@ -212,14 +219,12 @@ export default function CreateScreen() {
     }, 400);
   };
 
-  // ─── buildLabel : affiche rue + numéro + ville si dispo ──────────────────
   const buildLabel = (s: Suggestion): string => {
     const addr = s.address;
     const poi = addr.amenity || addr.tourism || addr.leisure || '';
     const road = addr.road || '';
     const number = addr.house_number || '';
     const ville = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
-
     if (poi && ville) return `${poi}, ${ville}`;
     if (road && number && ville) return `${number} ${road}, ${ville}`;
     if (road && ville) return `${road}, ${ville}`;
@@ -237,7 +242,6 @@ export default function CreateScreen() {
     setSuggestions([]); setShowSuggestions(false);
   };
 
-  // Tap sur la carte = déplace le marqueur
   const handleMapPress = (e: any) => {
     const { latitude, longitude } = e.nativeEvent.coordinate;
     setMarkerCoords({ latitude, longitude });
@@ -249,7 +253,7 @@ export default function CreateScreen() {
     setDate(''); setTime(''); setLocation(''); setLocationCoords(null);
     setMarkerCoords(null); setMapRegion(null); setDescription('');
     setSelectedSport('route'); setSelectedLevel('intermediaire');
-    setParticipants(8); setShowCalendar(false);
+    setGenreRequis('mixte'); setParticipants(8); setShowCalendar(false);
   };
 
   const handlePublish = async () => {
@@ -270,6 +274,7 @@ export default function CreateScreen() {
       lieu_rencontre: location, date_sortie: date, heure: time,
       participants_max: participants, description, createur_id: user.id,
       latitude: locationCoords.latitude, longitude: locationCoords.longitude,
+      genre_requis: genreRequis,
     });
     setLoading(false);
     if (error) Alert.alert('Erreur', error.message);
@@ -369,6 +374,23 @@ export default function CreateScreen() {
             </View>
           </View>
 
+          {/* ─── Genre requis ────────────────────────────────────────────── */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Ouvert à</Text>
+            <View style={styles.genreRow}>
+              {GENRES_REQUIS.map(g => (
+                <TouchableOpacity
+                  key={g.id}
+                  style={[styles.genreBtn, genreRequis === g.id && styles.genreBtnActive]}
+                  onPress={() => setGenreRequis(g.id)}
+                >
+                  <Text style={styles.genreEmoji}>{g.emoji}</Text>
+                  <Text style={[styles.genreLabel, genreRequis === g.id && styles.genreLabelActive]}>{g.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Participants max</Text>
             <View style={styles.participantsRow}>
@@ -378,7 +400,6 @@ export default function CreateScreen() {
             </View>
           </View>
 
-          {/* ─── Point de rendez-vous + mini carte ────────────────────────── */}
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>
               Point de rendez-vous
@@ -393,7 +414,6 @@ export default function CreateScreen() {
               onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
             />
 
-            {/* Suggestions Nominatim */}
             {showSuggestions && suggestions.length > 0 && (
               <View style={styles.suggestionsBox}>
                 {suggestions.map((s, i) => (
@@ -405,7 +425,6 @@ export default function CreateScreen() {
               </View>
             )}
 
-            {/* Mini carte — tap pour déplacer le marqueur */}
             {mapRegion && markerCoords && (
               <View style={styles.miniMapWrapper}>
                 <MapView
@@ -418,10 +437,7 @@ export default function CreateScreen() {
                   pitchEnabled={false}
                   onPress={handleMapPress}
                 >
-                  <Marker
-                    coordinate={markerCoords}
-                    pinColor="#5B52F0"
-                  />
+                  <Marker coordinate={markerCoords} pinColor="#5B52F0" />
                 </MapView>
                 <View style={styles.miniMapHint}>
                   <Text style={styles.miniMapHintText}>📌 Appuie sur la carte pour déplacer le point</Text>
@@ -446,8 +462,6 @@ export default function CreateScreen() {
   );
 }
 
-// ─── Styles TimePicker modal ──────────────────────────────────────────────────
-
 const tp = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
   sheet: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 34 },
@@ -456,8 +470,6 @@ const tp = StyleSheet.create({
   cancelText: { fontSize: 14, color: '#8888bb', fontWeight: '500' },
   confirmText: { fontSize: 14, color: '#5B52F0', fontWeight: '700' },
 });
-
-// ─── Styles calendrier ────────────────────────────────────────────────────────
 
 const cal = StyleSheet.create({
   wrapper: { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1.5, borderColor: '#DDD8FF', padding: 14, marginTop: 8, shadowColor: '#5B52F0', shadowOpacity: 0.08, shadowRadius: 10, elevation: 4 },
@@ -477,8 +489,6 @@ const cal = StyleSheet.create({
   selectedText: { color: '#fff', fontWeight: '700' },
   pastText: { color: '#8888bb' },
 });
-
-// ─── Styles écran ─────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F3FF', paddingTop: 56 },
@@ -506,6 +516,18 @@ const styles = StyleSheet.create({
   levelRow: { flexDirection: 'row', gap: 8 },
   levelBtn: { flex: 1, padding: 9, borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#fff', alignItems: 'center' },
   levelText: { fontSize: 11, fontWeight: '600', color: '#8888bb' },
+  // ─── Genre requis ─────────────────────────────────────────────────────────
+  genreRow: { gap: 8 },
+  genreBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: 11, borderRadius: 10, borderWidth: 1.5,
+    borderColor: '#DDD8FF', backgroundColor: '#fff',
+  },
+  genreBtnActive: { borderColor: '#5B52F0', backgroundColor: '#EEEDFE' },
+  genreEmoji: { fontSize: 16 },
+  genreLabel: { fontSize: 13, fontWeight: '500', color: '#8888bb' },
+  genreLabelActive: { color: '#5B52F0', fontWeight: '700' },
+  // ──────────────────────────────────────────────────────────────────────────
   participantsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', padding: 10 },
   pBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#EEEDFE', borderWidth: 1, borderColor: '#DDD8FF', alignItems: 'center', justifyContent: 'center' },
   pBtnText: { fontSize: 18, color: '#5B52F0', lineHeight: 22 },
@@ -519,12 +541,10 @@ const styles = StyleSheet.create({
   suggestionBorder: { borderBottomWidth: 1, borderBottomColor: '#F4F3FF' },
   suggestionIcon: { fontSize: 14 },
   suggestionText: { fontSize: 13, color: '#1a1a2e', flex: 1 },
-  // ─── Mini carte ────────────────────────────────────────────────────────────
   miniMapWrapper: { marginTop: 8, borderRadius: 14, overflow: 'hidden', borderWidth: 1.5, borderColor: '#DDD8FF' },
   miniMap: { height: 220, width: '100%' },
   miniMapHint: { backgroundColor: '#EEEDFE', paddingVertical: 8, paddingHorizontal: 12 },
   miniMapHintText: { fontSize: 12, color: '#5B52F0', fontWeight: '500', textAlign: 'center' },
-  // ──────────────────────────────────────────────────────────────────────────
   publishBtn: { backgroundColor: '#5B52F0', borderRadius: 12, padding: 15, alignItems: 'center', marginTop: 8 },
   publishText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

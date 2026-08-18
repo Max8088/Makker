@@ -27,6 +27,12 @@ const CRENEAUX = [
   { id: 'weekend', label: '📅 Weekend' },
 ];
 
+const GENRES = [
+  { id: 'homme', label: 'Homme', emoji: '👨' },
+  { id: 'femme', label: 'Femme', emoji: '👩' },
+  { id: 'non_precise', label: 'Non précisé', emoji: '🤝' },
+];
+
 export default function SettingsScreen({ onBack, onLogout, onRestartOnboarding }: { onBack: () => void; onLogout: () => void; onRestartOnboarding?: () => void }) {
   const [prenom, setPrenom] = useState('');
   const [nom, setNom] = useState('');
@@ -34,6 +40,7 @@ export default function SettingsScreen({ onBack, onLogout, onRestartOnboarding }
   const [sportPrincipal, setSportPrincipal] = useState('route');
   const [niveau, setNiveau] = useState('intermediaire');
   const [creneaux, setCreneaux] = useState<string[]>(['matin']);
+  const [genre, setGenre] = useState('non_precise');
   const [loading, setLoading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -51,6 +58,7 @@ export default function SettingsScreen({ onBack, onLogout, onRestartOnboarding }
       setSportPrincipal(data.sport_principal || 'route');
       setNiveau(data.niveau || 'intermediaire');
       setCreneaux(data.creneaux || ['matin']);
+      setGenre(data.genre || 'non_precise');
       setAvatarUrl(data.avatar_url || null);
     }
   };
@@ -97,7 +105,7 @@ export default function SettingsScreen({ onBack, onLogout, onRestartOnboarding }
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { error } = await supabase.from('profiles')
-      .update({ prenom, nom, ville, sport_principal: sportPrincipal, niveau, creneaux })
+      .update({ prenom, nom, ville, sport_principal: sportPrincipal, niveau, creneaux, genre })
       .eq('id', user.id);
     setLoading(false);
     if (error) { Alert.alert('Erreur', error.message); }
@@ -206,6 +214,30 @@ export default function SettingsScreen({ onBack, onLogout, onRestartOnboarding }
               <Text style={styles.label}>Ville</Text>
               <TextInput style={styles.input} value={ville} onChangeText={setVille} placeholder="ex: Lyon" placeholderTextColor="#bbbbdd" />
             </View>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Genre</Text>
+              <View style={styles.segmentRow}>
+                {GENRES.map((g, i) => {
+                  const active = genre === g.id;
+                  return (
+                    <TouchableOpacity
+                      key={g.id}
+                      style={[
+                        styles.segmentBtn,
+                        i === 0 && styles.segmentFirst,
+                        i === GENRES.length - 1 && styles.segmentLast,
+                        active && styles.segmentBtnActive,
+                      ]}
+                      onPress={() => setGenre(g.id)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.segmentEmoji}>{g.emoji}</Text>
+                      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{g.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
           </View>
 
           <View style={styles.section}>
@@ -285,6 +317,21 @@ const styles = StyleSheet.create({
   fieldGroup: { gap: 6 },
   label: { fontSize: 12, fontWeight: '600', color: '#8888bb' },
   input: { backgroundColor: '#F4F3FF', borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD8FF', padding: 11, fontSize: 13, color: '#1a1a2e' },
+  // ─── Genre segmenté ─────────────────────────────────────────────────────────
+  segmentRow: { flexDirection: 'row', gap: 8 },
+  segmentBtn: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 11, gap: 3,
+    borderRadius: 12, borderWidth: 1.5, borderColor: '#DDD8FF',
+    backgroundColor: '#F4F3FF',
+  },
+  segmentFirst: {},
+  segmentLast: {},
+  segmentBtnActive: { borderColor: '#5B52F0', backgroundColor: '#EEEDFE' },
+  segmentEmoji: { fontSize: 18 },
+  segmentText: { fontSize: 11, fontWeight: '500', color: '#8888bb', textAlign: 'center' },
+  segmentTextActive: { color: '#5B52F0', fontWeight: '700' },
+  // ────────────────────────────────────────────────────────────────────────────
   sportGrid: { flexDirection: 'row', gap: 8 },
   sportBtn: { flex: 1, alignItems: 'center', padding: 10, borderRadius: 12, borderWidth: 1.5, borderColor: '#DDD8FF', backgroundColor: '#F4F3FF' },
   sportBtnActive: { borderColor: '#5B52F0', backgroundColor: '#EEEDFE' },
